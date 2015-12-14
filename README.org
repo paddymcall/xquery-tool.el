@@ -1,0 +1,3 @@
+#+TITLE: xquery-tool: A simplistic interface to saxonb's xquery for emacs
+
+Main entry point is `xquery-tool-query'.
