@@ -165,8 +165,12 @@ namespaces used for constructing the links are removed."
   "Remove all references to a namespace NAMESPACE.
 
 Gets rid of namespace declarations and attributes under that
-namespace (not elements, though)."
-  (let* ((namespace (or namespace "teied"))
+namespace (not elements, though).
+
+When this function is called, it expects that position in buffer
+and the values xmltok-* have been set up by `xmltok-forward'."
+  (let* ((el-end (point-marker))
+	 (namespace (or namespace "teied"))
 	 (namespace-candidates;; make an alist to look up namespace
 	  (cl-remove-if 'null
 			(append
@@ -176,15 +180,21 @@ namespace (not elements, though)."
 						(cons (xmltok-attribute-local-name x) x))) xmltok-namespace-attributes))))
 	 delete-me)
     (save-excursion
-      (save-restriction
-	(setq delete-me (pop namespace-candidates))
-	(goto-char (xmltok-attribute-name-start (cdr delete-me)))
-	(delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
-	(just-one-space)
-	(when namespace-candidates
+      (setq delete-me (pop namespace-candidates))
+      (goto-char (xmltok-attribute-name-start (cdr delete-me)))
+      (delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
+      (just-one-space)
+      (save-match-data
+	(save-excursion
 	  (goto-char xmltok-start)
-	  (xmltok-forward)
-	  (xquery-tool-forget-namespace namespace))))))
+	  (when (re-search-forward "\\s-+>" el-end t)
+	    (goto-char (- (point) (length (match-string 0))))
+	    (delete-char (1- (length (match-string 0)))))))
+      (when namespace-candidates
+	(goto-char xmltok-start)
+	(xmltok-forward)
+	(xquery-tool-forget-namespace namespace)))))
+
 
 
 
