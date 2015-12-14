@@ -1,6 +1,10 @@
 #+TITLE: xquery-tool: A simplistic interface to saxonb's xquery for emacs
 
-Main entry point is `xquery-tool-query'.
+There is only one entry point: `xquery-tool-query'.
+
+Dependencies (apart from emacs):
+
+- saxon basic (http://saxon.sourceforge.net/; on Debian, `aptitude install libsaxonb-java')
 
 Calling `M-x xquery-tool-query RET //title RET RET' with this document
 (see http://www.w3schools.com/xsl/xpath_syntax.asp) open:
