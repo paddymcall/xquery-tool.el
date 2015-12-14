@@ -242,9 +242,7 @@ If XML-FILE is specified, look at that for namespace declarations."
     (if (or
 	 (null (file-exists-p tmp-file))
 	 (file-newer-than-file-p original-file tmp-file))
-	(with-current-buffer (get-buffer-create "*potemkin*")
-	  (switch-to-buffer (current-buffer))
-	  (erase-buffer)
+	(with-temp-buffer
 	  (insert-buffer-substring-no-properties original)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
