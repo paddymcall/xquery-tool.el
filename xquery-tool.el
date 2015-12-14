@@ -1,22 +1,46 @@
-;;; xquery-tool.el --- A simple interface to saxonb xquery
+;;; xquery-tool.el --- A simple interface to saxonb's xquery.
 
-;; interact with a command line like this:
-;; java -classpath /usr/share/java/saxonb.jar net.sf.saxon.Query -qs:"//" -s:/some/file.xml
+;; Copyright (C) 2015 Patrick McAllister
+
+;; Author: Patrick McAllister <pma@rdorte.org>
+;; Keywords: xml, xquery, emacs
+;; URL: https://github.com/paddymcall/xquery-tool.el
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; 
+
+;; This program lets you run an xquery against a file, via saxonb.
+
+;; To use, customize the `xquery-tool-java-binary' and
+;; `xquery-tool-saxonb-jar' settings (M-x customize-group RET
+;; xquery-tool), and then call `xquery-tool-query' from a buffer
+;; visiting an xml document.
 
 ;;; Code:
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type '(file))
 
 ;; (setq xquery-tool-java-binary "/usr/bin/java")
 
 (defcustom xquery-tool-saxonb-jar "/usr/share/java/saxonb.jar"
   "Full path of the saxonb.jar on your system."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type '(file))
 
 (defun xquery-tool-query (xquery xml-thing)
   "Run the query XQUERY on the xml contained in XML-THING.
@@ -26,7 +50,6 @@ XQUERY can be:
  - a filename: then that is taken as input without further processing.
 
 XML-THING can be:
-
 - a buffer containing an xml document; (region?)
 - a filename to an xml document."
   (interactive
