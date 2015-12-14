@@ -48,6 +48,7 @@
   :group 'xquery-tool
   :type '(file))
 
+;;;###autoload
 (defun xquery-tool-query (xquery xml-thing &optional save-namespace)
   "Run the query XQUERY on the xml contained in XML-THING.
 
