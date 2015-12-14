@@ -23,12 +23,18 @@
 
 ;; This program lets you run an xquery against a file, via saxonb.
 
+;; If the result contains nodes, it tries to link the results back to
+;; the original file.
+
 ;; To use, customize the `xquery-tool-java-binary' and
 ;; `xquery-tool-saxonb-jar' settings (M-x customize-group RET
 ;; xquery-tool), and then call `xquery-tool-query' from a buffer
 ;; visiting an xml document.
 
 ;;; Code:
+
+(require 'xmltok)
+(require 'url-parse)
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
@@ -51,7 +57,11 @@ XQUERY can be:
 
 XML-THING can be:
 - a buffer containing an xml document; (region?)
-- a filename to an xml document."
+- a filename to an xml document.
+
+To use this function, you might first have to customize the
+`xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
+settings (M-x customize-group RET xquery-tool)."
   (interactive
    (let ((xquery (read-from-minibuffer "Your xquery: "))
 	 (source-buffer (find-file (read-file-name (format "Run on this file (default: %s): " (file-name-nondirectory (buffer-file-name))) nil (buffer-file-name)))))
@@ -209,7 +219,6 @@ If XML-FILE is specified, look at that for namespace declarations."
 	 (tmp-file (expand-file-name
 		    (format "%s_%s" (emacs-pid) (file-name-nondirectory original-file))
 		    temporary-file-directory))
-	(root-el t)
 	(new-namespace " xmlns:teied=\"potemkin\"")
 	(factor (length new-namespace)))
     (if (or

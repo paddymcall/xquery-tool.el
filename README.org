@@ -1,3 +1,28 @@
 #+TITLE: xquery-tool: A simplistic interface to saxonb's xquery for emacs
 
 Main entry point is `xquery-tool-query'.
+
+Calling `M-x xquery-tool-query RET //title RET RET' with this document
+open:
+
+#+BEGIN_SRC nxml
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore>
+<book>
+  <title lang="en">Harry Potter</title>
+  <price>29.99</price>
+</book>
+<book>
+  <title lang="en">Learning XML</title>
+  <price>39.95</price>
+</book>
+</bookstore>
+#+END_SRC
+
+should give you a buffer with these results:
+
+#+BEGIN_SRC nxml
+<?xml version="1.0" encoding="UTF-8"?>
+<title   lang="en">Harry Potter</title>
+<title   lang="en">Learning XML</title>
+#+END_SRC
