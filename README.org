@@ -3,7 +3,7 @@
 Main entry point is `xquery-tool-query'.
 
 Calling `M-x xquery-tool-query RET //title RET RET' with this document
-open:
+(see http://www.w3schools.com/xsl/xpath_syntax.asp) open:
 
 #+BEGIN_SRC nxml
 <?xml version="1.0" encoding="UTF-8"?>
