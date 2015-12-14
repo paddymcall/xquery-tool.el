@@ -48,6 +48,9 @@
   :group 'xquery-tool
   :type '(file))
 
+(defvar xquery-tool-xquery-history nil
+  "A var to hold the history of xqueries.")
+
 ;;;###autoload
 (defun xquery-tool-query (xquery xml-thing &optional save-namespace)
   "Run the query XQUERY on the xml contained in XML-THING.
@@ -68,7 +71,7 @@ If SAVE-NAMESPACE is not nil (or you use a prefix arg in the
 interactive call), then the attributes added to enable tracking
 of elements in the source document are not deleted."
   (interactive
-   (let ((xquery (read-from-minibuffer "Your xquery: "))
+   (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
 	 (source-buffer (find-file
 			 (read-file-name (format "Run on this file (default: %s): " (file-name-nondirectory (buffer-file-name))) nil (buffer-file-name)))))
      (when (buffer-modified-p source-buffer)
@@ -197,8 +200,6 @@ and the values xmltok-* have been set up by `xmltok-forward'."
 	(xquery-tool-forget-namespace namespace)))))
 
 
-
-
 (defun xquery-tool-setup-xquery-file (xquery &optional xml-file)
   "Construct an xquery file containing XQUERY.
 
@@ -227,6 +228,8 @@ If XML-FILE is specified, look at that for namespace declarations."
     (with-current-buffer tmp
       (insert xquery)
       (save-buffer)
+      ;; this buries it a bit better
+      (rename-buffer (format " %s-delete-after" (buffer-name)))
       (buffer-file-name (current-buffer)))))
 
 ;; Based on `tei-edit-parse-to-shadow'.
