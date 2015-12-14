@@ -48,7 +48,7 @@
   :group 'xquery-tool
   :type '(file))
 
-(defun xquery-tool-query (xquery xml-thing)
+(defun xquery-tool-query (xquery xml-thing &optional save-namespace)
   "Run the query XQUERY on the xml contained in XML-THING.
 
 XQUERY can be:
@@ -61,15 +61,20 @@ XML-THING can be:
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
-settings (M-x customize-group RET xquery-tool)."
+settings (M-x customize-group RET xquery-tool).
+
+If SAVE-NAMESPACE is not nil (or you use a prefix arg in the
+interactive call), then the attributes added to enable tracking
+of elements in the source document are not deleted."
   (interactive
    (let ((xquery (read-from-minibuffer "Your xquery: "))
-	 (source-buffer (find-file (read-file-name (format "Run on this file (default: %s): " (file-name-nondirectory (buffer-file-name))) nil (buffer-file-name)))))
+	 (source-buffer (find-file
+			 (read-file-name (format "Run on this file (default: %s): " (file-name-nondirectory (buffer-file-name))) nil (buffer-file-name)))))
      (when (buffer-modified-p source-buffer)
        (if (yes-or-no-p "Save buffer first?")
 	   (save-buffer source-buffer)
 	 (error "Can't work on modified buffer")))
-     (list xquery source-buffer)))
+     (list xquery source-buffer current-prefix-arg)))
   (let ((target-buffer (get-buffer-create "*xpath tool buffer*"))
 	(xml-source (cond ((bufferp xml-thing) (buffer-file-name xml-thing))
 			  ((and (file-exists-p xml-thing) (file-accessible-directory-p xml-thing)) xml-thing)))
@@ -97,7 +102,7 @@ settings (M-x customize-group RET xquery-tool)."
       (message "Something went wrong."))
     (with-current-buffer target-buffer
       (goto-char (point-min))
-      (xquery-tool-setup-xquery-results target-buffer)
+      (xquery-tool-setup-xquery-results target-buffer save-namespace)
       (set-buffer-modified-p nil)
       (read-only-mode))
     (switch-to-buffer-other-window target-buffer)))
@@ -173,7 +178,9 @@ namespace (not elements, though)."
     (save-excursion
       (save-restriction
 	(setq delete-me (pop namespace-candidates))
+	(goto-char (xmltok-attribute-name-start (cdr delete-me)))
 	(delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
+	(just-one-space)
 	(when namespace-candidates
 	  (goto-char xmltok-start)
 	  (xmltok-forward)
