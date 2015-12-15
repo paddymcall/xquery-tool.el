@@ -48,8 +48,53 @@
   :group 'xquery-tool
   :type '(file))
 
+(defcustom xquery-tool-result-buffer-name "*xquery-tool results*"
+  "Name of buffer to show results of xqueries in."
+  :group 'xquery-tool)
+
+(defcustom xquery-tool-temporary-xquery-file-name "xquery-temp.xq"
+  "Filename for storing one-off xqueries.
+It will be created in `temporary-file-directory'."
+  :group 'xquery-tool)
+
+;; (defcustom xquery-tool-temporary-indexed-xml-file-name "xquery-temp-indexed.xml"
+;;   "Filename for storing an indexed version of the xml you're querying.
+;; It will be created in `temporary-file-directory'."
+;;   :group 'xquery-tool)
+
+(defcustom xquery-tool-temporary-xml-file-name "xquery-temp.xml"
+  "Filename for storing xml that is not in a file (region, e.g.).
+It will be created in `temporary-file-directory'."
+  :group 'xquery-tool)
+
+(defcustom xquery-tool-link-namespace "tmplink"
+  "Name of namespace to use for linking xquery results to original file."
+  :group 'xquery-tool)
+
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
+
+(defun xquery-tool-xq-file (&optional fn)
+  "Get full path to temporary file with name FN.
+This is where we store the xquery.  Default for FN is
+`xquery-tool-temporary-xquery-file-name'."
+  (let ((fn (or fn xquery-tool-temporary-xquery-file-name)))
+    (expand-file-name fn temporary-file-directory)))
+
+(defun xquery-tool-indexed-xml-file (&optional fn)
+  "Get full path to temporary file with name FN.
+This is where the indexed xml file is stored.  Default for FN is
+`xquery-tool-temporary-indexed-xml-file-name'."
+  (let ((fn (or fn (format "%s_%s" (file-name-nondirectory (buffer-file-name)) (emacs-pid)))))
+    (expand-file-name fn temporary-file-directory)))
+
+(defun xquery-tool-xml-file (&optional fn)
+    "Get full path to temporary file with name FN.
+This is where temporary xml docs are stored that don't have their
+own files.  Default for FN is
+`xquery-tool-temporary-xml-file-name'."
+    (let ((fn (or fn xquery-tool-temporary-xml-file-name)))
+  (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
 (defun xquery-tool-query (xquery xml-thing &optional save-namespace)
@@ -60,8 +105,8 @@ XQUERY can be:
  - a filename: then that is taken as input without further processing.
 
 XML-THING can be:
-- a buffer containing an xml document; (region?)
-- a filename to an xml document.
+- a buffer containing an xml document (TODO: make work for region);
+- a path to an xml document.
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
@@ -93,14 +138,14 @@ of elements in the source document are not deleted."
       (erase-buffer))
     (setq process-status
 	  (call-process "java" ;; program
-		  xquery-file				    ;; infile
-		  target-buffer;; destination
-		  nil;; update display
-		  ;; args
-		  "-classpath" xquery-tool-saxonb-jar
-		  "net.sf.saxon.Query"
-		  (format "-s:%s" xml-thing)
-		  "-"))
+			xml-thing;; infile
+			target-buffer;; destination
+			nil;; update display
+			;; args
+			"-classpath" xquery-tool-saxonb-jar
+			"net.sf.saxon.Query"
+			"-s:-"
+			(format "-q:%s" xquery-file)))
     (if (= 0 process-status)
 	(message "Success.")
       (message "Something went wrong."))
@@ -127,7 +172,7 @@ namespaces used for constructing the links are removed."
 	   ((and (member xmltok-type '(start-tag empty-element)) (or xmltok-namespace-attributes xmltok-attributes))
 	    (set-marker current-pos (point))
 	    (dolist (xatt xmltok-attributes)
-	      (when (or (string= (xmltok-attribute-prefix xatt) "teied") (string= (xmltok-attribute-local-name xatt) "start"))
+	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace) (string= (xmltok-attribute-local-name xatt) "start"))
 		(make-text-button
 		 (1+ xmltok-start)
 		 xmltok-name-end
@@ -135,9 +180,9 @@ namespaces used for constructing the links are removed."
 		 'action 'xquery-tool-get-and-open-location
 		 'follow-link t
 		 'target (xmltok-attribute-value xatt))))
-	    ;; remove all traces of teied namespace thing
+	    ;; remove all traces of xquery-tool-link-namespace namespace thing
 	    (unless save-namespaces
-	      (xquery-tool-forget-namespace "teied"))
+	      (xquery-tool-forget-namespace xquery-tool-link-namespace))
 	    (goto-char current-pos))))
 	(set-marker current-pos nil)))))
 
@@ -174,7 +219,7 @@ namespace (not elements, though).
 When this function is called, it expects that position in buffer
 and the values xmltok-* have been set up by `xmltok-forward'."
   (let* ((el-end (point-marker))
-	 (namespace (or namespace "teied"))
+	 (namespace (or namespace xquery-tool-link-namespace))
 	 (namespace-candidates;; make an alist to look up namespace
 	  (cl-remove-if 'null
 			(append
@@ -204,8 +249,10 @@ and the values xmltok-* have been set up by `xmltok-forward'."
   "Construct an xquery file containing XQUERY.
 
 If XML-FILE is specified, look at that for namespace declarations."
-  (let ((tmp (find-file-noselect (make-temp-file "xquery-tool")))
+  (let ((tmp (find-file-noselect (xquery-tool-xq-file)))
 	namespaces)
+    (with-current-buffer tmp
+      (erase-buffer))
     (when xml-file
       (when (null (file-exists-p xml-file))
 	(error (format "Could not access xml-file %s." xml-file)))
@@ -228,19 +275,15 @@ If XML-FILE is specified, look at that for namespace declarations."
     (with-current-buffer tmp
       (insert xquery)
       (save-buffer)
-      ;; this buries it a bit better
-      (rename-buffer (format " %s-delete-after" (buffer-name)))
       (buffer-file-name (current-buffer)))))
 
 ;; Based on `tei-edit-parse-to-shadow'.
 (defun xquery-tool-parse-to-shadow (&optional xmlfile)
-  "For each start-tag or empty element in XMLFILE, add a @teied:start attribute."
+  "For each start-tag or empty element in XMLFILE, add a @`xquery-tool-link-namespace':start attribute."
   (let* ((original (if (and xmlfile (file-exists-p xmlfile)) (find-file-noselect xmlfile) (current-buffer)))
 	 (original-file (buffer-file-name original))
-	 (tmp-file (expand-file-name
-		    (format "%s_%s" (emacs-pid) (file-name-nondirectory original-file))
-		    temporary-file-directory))
-	(new-namespace " xmlns:teied=\"potemkin\"")
+	 (tmp-file (xquery-tool-indexed-xml-file))
+	(new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	(factor (length new-namespace)))
     (if (or
 	 (null (file-exists-p tmp-file))
@@ -257,7 +300,7 @@ If XML-FILE is specified, look at that for namespace declarations."
 		  (+ factor
 		     (* -1 (- (point)
 			      (progn
-				(insert (format " teied:start=\"%s#%s\"" original-file xmltok-start))
+				(insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file xmltok-start))
 				(point)))))))
 	  (while (xmltok-forward)
 	    (when (member xmltok-type '(start-tag empty-element))
@@ -267,7 +310,7 @@ If XML-FILE is specified, look at that for namespace declarations."
 		      (+ factor
 			 (* -1 (- (point)
 				  (progn
-				    (insert (format " teied:start=\"%s#%s\"" original-file (- xmltok-start factor)))
+				    (insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file (- xmltok-start factor)))
 				    (point)))))))))
 	  (write-file tmp-file)))
     tmp-file))
