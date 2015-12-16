@@ -174,13 +174,15 @@ namespaces used for constructing the links are removed."
 	    (dolist (xatt xmltok-attributes)
 	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace)
 			(string= (xmltok-attribute-local-name xatt) "start"))
-		(make-text-button
-		 (1+ xmltok-start)
-		 xmltok-name-end
-		 'help-echo "Try to open corresponding element."
-		 'action 'xquery-tool-get-and-open-location
-		 'follow-link t
-		 'target (xmltok-attribute-value xatt))))
+		(let ((target (xmltok-attribute-value xatt)))
+		  (when target
+		    (make-text-button
+		     (1+ xmltok-start)
+		     xmltok-name-end
+		     'help-echo (format "Try to go to %s." target)
+		     'action 'xquery-tool-get-and-open-location
+		     'follow-link t
+		     'target target)))))
 	    ;; remove all traces of xquery-tool-link-namespace namespace thing
 	    (unless save-namespaces
 	      (save-excursion
