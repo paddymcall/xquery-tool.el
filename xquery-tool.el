@@ -137,15 +137,15 @@ of elements in the source document are not deleted."
       (if buffer-read-only (read-only-mode -1))
       (erase-buffer))
     (setq process-status
-	  (call-process "java" ;; program
-			xml-thing;; infile
+	  (call-process (shell-quote-argument xquery-tool-java-binary) ;; program
+			(shell-quote-argument xml-thing);; infile
 			target-buffer;; destination
 			nil;; update display
 			;; args
-			"-classpath" xquery-tool-saxonb-jar
+			"-classpath" (shell-quote-argument xquery-tool-saxonb-jar)
 			"net.sf.saxon.Query"
 			"-s:-"
-			(format "-q:%s" xquery-file)))
+			(format "-q:%s" (shell-quote-argument xquery-file))))
     (if (= 0 process-status)
 	(message "Success.")
       (message "Something went wrong."))
