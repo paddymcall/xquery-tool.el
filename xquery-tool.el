@@ -138,7 +138,7 @@ of elements in the source document are not deleted."
       (erase-buffer))
     (setq process-status
 	  (call-process (shell-quote-argument xquery-tool-java-binary) ;; program
-			(shell-quote-argument xml-thing);; infile
+			xml-thing     ;; infile
 			target-buffer;; destination
 			nil;; update display
 			;; args
@@ -199,7 +199,7 @@ namespaces used for constructing the links are removed."
   "Find the target to open at POSITION."
   (let ((target (get-text-property position 'target)))
     (if (and target (url-generic-parse-url target))
-	(xquery-tool-open-location target)
+	(xquery-tool-open-location (url-unhex-string target))
       (error "This does not look like an url: %s" target))))
 
 
@@ -265,8 +265,6 @@ If XML-FILE is specified, look at that for namespace declarations."
     (with-current-buffer tmp
       (erase-buffer))
     (when xml-file
-      (when (null (file-exists-p xml-file))
-	(error (format "Could not access xml-file %s." xml-file)))
       (with-current-buffer (find-file-noselect xml-file)
 	(save-excursion
 	  (save-restriction
@@ -297,7 +295,7 @@ add an @`xquery-tool-link-namespace':start attribute."
   (let* ((original (if (and xmlfile (file-exists-p xmlfile)) (find-file-noselect xmlfile) (current-buffer)))
 	 (start (if (use-region-p) (region-beginning) (point-min)))
 	 (end (if (use-region-p) (region-end) (point-max)))
-	 (original-file (buffer-file-name original))
+	 (original-file (url-encode-url (buffer-file-name original)))
 	 (tmp-file (xquery-tool-indexed-xml-file))
 	(new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	(factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
