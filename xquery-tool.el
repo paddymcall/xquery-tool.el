@@ -301,7 +301,8 @@ add an @`xquery-tool-link-namespace':start attribute."
 	(factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
     (if (or
 	 (null (file-exists-p tmp-file))
-	 (file-newer-than-file-p original-file tmp-file)
+	 (null (file-exists-p (url-unhex-string original-file)))
+	 (file-newer-than-file-p (url-unhex-string original-file) tmp-file)
 	 (use-region-p)
 	 (null xquery-tool-last-xquery-on-full-file))
 	(with-temp-buffer
