@@ -172,7 +172,8 @@ namespaces used for constructing the links are removed."
 	   ((and (member xmltok-type '(start-tag empty-element)) (or xmltok-namespace-attributes xmltok-attributes))
 	    (set-marker current-pos (point))
 	    (dolist (xatt xmltok-attributes)
-	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace) (string= (xmltok-attribute-local-name xatt) "start"))
+	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace)
+			(string= (xmltok-attribute-local-name xatt) "start"))
 		(make-text-button
 		 (1+ xmltok-start)
 		 xmltok-name-end
@@ -182,7 +183,13 @@ namespaces used for constructing the links are removed."
 		 'target (xmltok-attribute-value xatt))))
 	    ;; remove all traces of xquery-tool-link-namespace namespace thing
 	    (unless save-namespaces
-	      (xquery-tool-forget-namespace xquery-tool-link-namespace))
+	      (save-excursion
+		(save-restriction
+		  (narrow-to-region xmltok-start current-pos)
+		  (xquery-tool-forget-namespace xquery-tool-link-namespace)
+		  (goto-char (point-min))
+		  (while (re-search-forward "\n" nil t)
+		    (join-line)))))
 	    (goto-char current-pos))))
 	(set-marker current-pos nil)))))
 
@@ -217,7 +224,8 @@ Gets rid of namespace declarations and attributes under that
 namespace (not elements, though).
 
 When this function is called, it expects that position in buffer
-and the values xmltok-* have been set up by `xmltok-forward'."
+and the values xmltok-* have been set up by `xmltok-forward', and
+that the buffer is narrowed to only the start-tag or empty-element."
   (let* ((el-end (point-marker))
 	 (namespace (or namespace xquery-tool-link-namespace))
 	 (namespace-candidates;; make an alist to look up namespace
@@ -228,21 +236,22 @@ and the values xmltok-* have been set up by `xmltok-forward'."
 			 (mapcar  (lambda (x) (when (string= (xmltok-attribute-local-name x) namespace)
 						(cons (xmltok-attribute-local-name x) x))) xmltok-namespace-attributes))))
 	 delete-me)
-    (save-excursion
-      (setq delete-me (pop namespace-candidates))
-      (goto-char (xmltok-attribute-name-start (cdr delete-me)))
-      (delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
-      (just-one-space)
-      (save-match-data
-	(save-excursion
+    (when namespace-candidates
+      (save-excursion
+	(setq delete-me (pop namespace-candidates))
+	(goto-char (xmltok-attribute-name-start (cdr delete-me)))
+	(delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
+	(just-one-space)
+	(save-match-data
+	  (save-excursion
+	    (goto-char xmltok-start)
+	    (when (re-search-forward "\\s-+>" el-end t)
+	      (goto-char (- (point) (length (match-string 0))))
+	      (delete-char (1- (length (match-string 0)))))))
+	(when namespace-candidates
 	  (goto-char xmltok-start)
-	  (when (re-search-forward "\\s-+>" el-end t)
-	    (goto-char (- (point) (length (match-string 0))))
-	    (delete-char (1- (length (match-string 0)))))))
-      (when namespace-candidates
-	(goto-char xmltok-start)
-	(xmltok-forward)
-	(xquery-tool-forget-namespace namespace)))))
+	  (xmltok-forward)
+	  (xquery-tool-forget-namespace namespace))))))
 
 
 (defun xquery-tool-setup-xquery-file (xquery &optional xml-file)
