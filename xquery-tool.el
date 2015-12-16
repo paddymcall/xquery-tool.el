@@ -279,7 +279,7 @@ If XML-FILE is specified, look at that for namespace declarations."
       (buffer-file-name (current-buffer)))))
 
 ;; Based on `tei-edit-parse-to-shadow'.
-(defun xquery-tool-parse-to-shadow (xmlfile)
+(defun xquery-tool-parse-to-shadow (&optional xmlfile)
   "Fix xml in xmlfile so that it can be traced from xquery.
 Currently, for each start-tag or empty element in XMLFILE, this
 add an @`xquery-tool-link-namespace':start attribute."
@@ -296,7 +296,7 @@ add an @`xquery-tool-link-namespace':start attribute."
 	 (use-region-p)
 	 (null xquery-tool-last-xquery-on-full-file))
 	(with-temp-buffer
-	  (delete-file tmp-file)
+	  (if (file-exists-p tmp-file) (delete-file tmp-file))
 	  (insert-buffer-substring-no-properties original start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
