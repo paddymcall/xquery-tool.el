@@ -74,9 +74,9 @@ It will be created in `temporary-file-directory'."
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
 
-(defvar xquery-tool-last-xquery-on-full-file nil
-  "If non-nil, the last xquery was run on a full xml document.
-Important for knowing when to regenerate the xml source.")
+;; (defvar xquery-tool-last-xquery-on-full-file nil
+;;   "If non-nil, the last xquery was run on a full xml document.
+;; Important for knowing when to regenerate the xml source.")
 
 (defun xquery-tool-xq-file (&optional fn)
   "Get full path to temporary file with name FN.
@@ -85,11 +85,10 @@ This is where we store the xquery.  Default for FN is
   (let ((fn (or fn xquery-tool-temporary-xquery-file-name)))
     (expand-file-name fn temporary-file-directory)))
 
-(defun xquery-tool-indexed-xml-file (fn)
-  "Get full path to temporary file based on filename FN.
-This is where the indexed xml file is stored."
-  (let ((fn (format "%s_%s" (file-name-nondirectory (buffer-file-name)) (emacs-pid))))
-    (expand-file-name fn temporary-file-directory)))
+(defun xquery-tool-indexed-xml-file-name (hash)
+  "Get full path to temporary file based on hashsum HASH."
+  (let* ((prefix (format "xquery-tool-tmp-%s" (emacs-pid))))
+    (expand-file-name (format "%s-%s" prefix hash) temporary-file-directory)))
 
 (defun xquery-tool-xml-file (&optional fn)
     "Get full path to temporary file with name FN.
@@ -107,7 +106,7 @@ XQUERY can be:
  - a string: then that is used to compose an xquery;
  - a filename: then that is taken as input without further processing.
 
-XML-THING should be a buffer containing an xml document and
+XML-BUFF should be a buffer containing an xml document and
 defaults to the current buffer. If a region is active, it will
 operate only on that region.
 
@@ -126,14 +125,15 @@ of elements in the source document are not deleted."
 	 (if (file-exists-p xquery)
 	     xquery
 	   (xquery-tool-setup-xquery-file xquery (buffer-file-name))))
+	(xml-shadow-file (with-current-buffer xml-buff
+			   (xquery-tool-parse-to-shadow)))
 	process-status)
-    (setq xml-thing (xquery-tool-parse-to-shadow xml-buff))
     (with-current-buffer target-buffer
       (if buffer-read-only (read-only-mode -1))
       (erase-buffer))
     (setq process-status
 	  (call-process (shell-quote-argument xquery-tool-java-binary) ;; program
-			xml-thing     ;; infile
+			xml-shadow-file     ;; infile
 			target-buffer;; destination
 			nil;; update display
 			;; args
@@ -287,24 +287,21 @@ If XML-FILE is specified, look at that for namespace declarations."
   "Fix xml in XMLBUFFER (default current-buffer) so that it can be traced from xquery.
 Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
-to the position in the original source."
-  (let* ((original (if (bufferp xmlbuffer) xmlbuffer (current-buffer)))
-	 (start (with-current-buffer original (if (use-region-p) (region-beginning) (point-min))))
-	 (end (with-current-buffer original (if (use-region-p) (region-end) (point-max))))
-	 (original-file (if (buffer-file-name original) (url-encode-url (buffer-file-name original))))
-	 (tmp-file (xquery-tool-indexed-xml-file (or original-file (buffer-name))))
+to the position in the original source.
+Returns the filename to which the shadow tree was written."
+  (with-current-buffer (if (bufferp xmlbuffer) xmlbuffer (current-buffer))
+    (let* ((start (if (use-region-p) (region-beginning) (point-min)))
+	   (end (if (use-region-p) (region-end) (point-max)))
+	   (src-buffer (current-buffer))
+	   (original-file-name (if (buffer-file-name (current-buffer))
+				   (url-encode-url (buffer-file-name (current-buffer)))
+				 (format "buf://%s" (url-encode-url (buffer-name)))))
+	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
 	(new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	(factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
-    (if (or
-	 (null original-file)
-	 (null (file-exists-p tmp-file))
-	 (null (file-exists-p (url-unhex-string original-file)))
-	 (file-newer-than-file-p (url-unhex-string original-file) tmp-file)
-	 (use-region-p)
-	 (null xquery-tool-last-xquery-on-full-file))
+      (unless (file-exists-p tmp-file-name)
 	(with-temp-buffer
-	  (if (file-exists-p tmp-file) (delete-file tmp-file))
-	  (insert-buffer-substring-no-properties original start end)
+	  (insert-buffer-substring-no-properties src-buffer  start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
 	  (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag)) t))
@@ -315,7 +312,7 @@ to the position in the original source."
 		  (+ factor
 		     (* -1 (- (point)
 			      (progn
-				(insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file xmltok-start))
+				(insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file-name xmltok-start))
 				(point)))))))
 	  (while (xmltok-forward)
 	    (when (member xmltok-type '(start-tag empty-element))
@@ -325,14 +322,11 @@ to the position in the original source."
 		      (+ factor
 			 (* -1 (- (point)
 				  (progn
-				    (insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file (- xmltok-start factor)))
+				    (insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file-name (- xmltok-start factor)))
 				    (point)))))))))
-	  (write-file tmp-file nil)))
-    ;; remember if run on region or not
-    (if (use-region-p)
-	(setq xquery-tool-last-xquery-on-full-file nil)
-      (setq xquery-tool-last-xquery-on-full-file t))
-    tmp-file))
+	  (write-file tmp-file-name nil)))
+      tmp-file-name)))
+
 
 (provide 'xquery-tool)
 
