@@ -85,11 +85,10 @@ This is where we store the xquery.  Default for FN is
   (let ((fn (or fn xquery-tool-temporary-xquery-file-name)))
     (expand-file-name fn temporary-file-directory)))
 
-(defun xquery-tool-indexed-xml-file (&optional fn)
-  "Get full path to temporary file with name FN.
-This is where the indexed xml file is stored.  Default for FN is
-`xquery-tool-temporary-indexed-xml-file-name'."
-  (let ((fn (or fn (format "%s_%s" (file-name-nondirectory (buffer-file-name)) (emacs-pid)))))
+(defun xquery-tool-indexed-xml-file (fn)
+  "Get full path to temporary file based on filename FN.
+This is where the indexed xml file is stored."
+  (let ((fn (format "%s_%s" (file-name-nondirectory (buffer-file-name)) (emacs-pid))))
     (expand-file-name fn temporary-file-directory)))
 
 (defun xquery-tool-xml-file (&optional fn)
@@ -101,17 +100,16 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery xml-thing &optional save-namespace)
-  "Run the query XQUERY on the xml contained in XML-THING.
+(defun xquery-tool-query (xquery &optional xml-buff save-namespace)
+  "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
  - a string: then that is used to compose an xquery;
  - a filename: then that is taken as input without further processing.
 
-XML-THING can be:
-- a buffer containing an xml document (if a region is active, it
-  will operate only on that region);
-- a path to an xml document.
+XML-THING should be a buffer containing an xml document and
+defaults to the current buffer. If a region is active, it will
+operate only on that region.
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
@@ -123,16 +121,13 @@ of elements in the source document are not deleted."
   (interactive
    (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history)))
      (list xquery (current-buffer) current-prefix-arg)))
-  (let ((target-buffer (get-buffer-create "*xpath tool buffer*"))
-	(xml-source (cond ((bufferp xml-thing) (buffer-file-name xml-thing))
-			  ((and (stringp xml-thing) (file-exists-p xml-thing)) xml-thing)
-			  (t (error "Can not parse argument: %s" xml-thing))))
+  (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (if (file-exists-p xquery)
 	     xquery
 	   (xquery-tool-setup-xquery-file xquery (buffer-file-name))))
 	process-status)
-    (setq xml-thing (xquery-tool-parse-to-shadow xml-source))
+    (setq xml-thing (xquery-tool-parse-to-shadow xml-buff))
     (with-current-buffer target-buffer
       (if buffer-read-only (read-only-mode -1))
       (erase-buffer))
@@ -288,18 +283,20 @@ If XML-FILE is specified, look at that for namespace declarations."
       (buffer-file-name (current-buffer)))))
 
 ;; Based on `tei-edit-parse-to-shadow'.
-(defun xquery-tool-parse-to-shadow (&optional xmlfile)
-  "Fix xml in xmlfile so that it can be traced from xquery.
-Currently, for each start-tag or empty element in XMLFILE, this
-add an @`xquery-tool-link-namespace':start attribute."
-  (let* ((original (if (and xmlfile (file-exists-p xmlfile)) (find-file-noselect xmlfile) (current-buffer)))
-	 (start (if (use-region-p) (region-beginning) (point-min)))
-	 (end (if (use-region-p) (region-end) (point-max)))
-	 (original-file (url-encode-url (buffer-file-name original)))
-	 (tmp-file (xquery-tool-indexed-xml-file))
+(defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
+  "Fix xml in XMLBUFFER (default current-buffer) so that it can be traced from xquery.
+Currently, for each start-tag or empty element in XMLBUFFER, this
+adds an @`xquery-tool-link-namespace':start attribute referring
+to the position in the original source."
+  (let* ((original (if (bufferp xmlbuffer) xmlbuffer (current-buffer)))
+	 (start (with-current-buffer original (if (use-region-p) (region-beginning) (point-min))))
+	 (end (with-current-buffer original (if (use-region-p) (region-end) (point-max))))
+	 (original-file (if (buffer-file-name original) (url-encode-url (buffer-file-name original))))
+	 (tmp-file (xquery-tool-indexed-xml-file (or original-file (buffer-name))))
 	(new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	(factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
     (if (or
+	 (null original-file)
 	 (null (file-exists-p tmp-file))
 	 (null (file-exists-p (url-unhex-string original-file)))
 	 (file-newer-than-file-p (url-unhex-string original-file) tmp-file)

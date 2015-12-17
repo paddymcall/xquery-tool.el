@@ -10,17 +10,17 @@ Calling `M-x xquery-tool-query RET //title RET RET' with this document
 (see http://www.w3schools.com/xsl/xpath_syntax.asp) open:
 
 #+BEGIN_SRC nxml
-<?xml version="1.0" encoding="UTF-8"?>
-<bookstore>
-<book>
-  <title lang="en">Harry Potter</title>
-  <price>29.99</price>
-</book>
-<book>
-  <title lang="en">Learning XML</title>
-  <price>39.95</price>
-</book>
-</bookstore>
+  <?xml version="1.0" encoding="UTF-8"?>
+  <bookstore>
+  <book>
+    <title lang="en">Harry Potter</title>
+    <price>29.99</price>
+  </book>
+  <book>
+    <title lang="en">Learning XML</title>
+    <price>39.95</price>
+  </book>
+  </bookstore>
 #+END_SRC
 
 should give you a buffer with these results:
