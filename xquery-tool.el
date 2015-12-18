@@ -107,7 +107,7 @@ XQUERY can be:
  - a filename: then that is taken as input without further processing.
 
 XML-BUFF should be a buffer containing an xml document and
-defaults to the current buffer. If a region is active, it will
+defaults to the current buffer.  If a region is active, it will
 operate only on that region.
 
 To use this function, you might first have to customize the
@@ -142,8 +142,8 @@ of elements in the source document are not deleted."
 			"-s:-"
 			(format "-q:%s" (shell-quote-argument xquery-file))))
     (if (= 0 process-status)
-	(message "Success.")
-      (message "Something went wrong."))
+	(message "Called saxonb, setting up results ...")
+      (message "Something went wrong in call to saxonb."))
     (with-current-buffer target-buffer
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
@@ -151,41 +151,42 @@ of elements in the source document are not deleted."
       (read-only-mode))
     (switch-to-buffer-other-window target-buffer)))
 
-(defun xquery-tool-setup-xquery-results (target-buffer &optional save-namespaces)
-  "Try to link the results in TARGET-BUFFER to the src buffer.
+(defun xquery-tool-setup-xquery-results (&optional target-buffer save-namespaces)
+  "Try to construct links for the results in TARGET-BUFFER.
 
-If SAVE-NAMESPACES is nil (the default), then the shadow
-namespaces used for constructing the links are removed."
+Default for TARGET-BUFFER is the current buffer.  If
+SAVE-NAMESPACES is nil (the default), then the shadow namespaces
+used for constructing the links are removed."
   (let ((current-pos (make-marker))
+	(target-buffer (if (bufferp target-buffer) target-buffer (current-buffer)))
 	teied-item
 	teied-candidates)
     (with-current-buffer target-buffer
       (save-excursion
 	(goto-char (point-min))
 	(while (xmltok-forward)
-	  (let ((atts
-		 ))
 	  (when (and (member xmltok-type '(start-tag empty-element)) (or xmltok-namespace-attributes xmltok-attributes))
 	    (set-marker current-pos (point))
-	    (dolist (xatt xmltok-attributes)
-	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace)
-			(string= (xmltok-attribute-local-name xatt) "start"))
-		(let ((target (xmltok-attribute-value xatt)))
-		  (when target
-		    (make-text-button
-		     (1+ xmltok-start)
-		     xmltok-name-end
-		     'help-echo (format "Try to go to %s." target)
-		     'action 'xquery-tool-get-and-open-location
-		     'follow-link t
-		     'target target)))))
-	    ;; remove all traces of xquery-tool-link-namespace namespace thing
-	    (unless save-namespaces
-	      (xquery-tool-forget-namespace (xquery-tool-get-namespace-candidates))
-	      (goto-char xmltok-start)
-	      (while (re-search-forward "\n" current-pos t)
-		(join-line)))
-	    (goto-char current-pos))))
+	    (let* ((atts (xquery-tool-get-namespace-candidates))
+		   (start-att (cl-remove-if 'null
+					    (mapcar (lambda (x) (if (string= (xmltok-attribute-local-name x) "start") x)) atts)))
+		   target)
+	      (when (= 1 (length start-att))
+		(setq target (xmltok-attribute-value (elt start-att 0)))
+		(make-text-button
+		 (1+ xmltok-start)
+		 xmltok-name-end
+		 'help-echo (format "Try to go to %s." target)
+		 'action 'xquery-tool-get-and-open-location
+		 'follow-link t
+		 'target target))
+	      ;; remove all traces of xquery-tool-link-namespace namespace thing
+	      (unless save-namespaces
+		(xquery-tool-forget-namespace atts)
+		(goto-char xmltok-start)
+		(while (re-search-forward "\n" current-pos t)
+		  (join-line))))
+	    (goto-char current-pos)))
 	(set-marker current-pos nil)))))
 
 (defun xquery-tool-get-and-open-location (position)
@@ -278,7 +279,8 @@ If XML-FILE is specified, look at that for namespace declarations."
 
 ;; Based on `tei-edit-parse-to-shadow'.
 (defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
-  "Fix xml in XMLBUFFER (default current-buffer) so that it can be traced from xquery.
+  "Make XMLBUFFER (default `current-buffer') traceable.
+
 Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
 to the position in the original source.
@@ -298,7 +300,7 @@ Returns the filename to which the shadow tree was written."
 	  (insert-buffer-substring-no-properties src-buffer  start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
-	  (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag)) t))
+	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
 	  (save-excursion
 	    (goto-char xmltok-name-end)
 	    (insert new-namespace)
@@ -323,6 +325,7 @@ Returns the filename to which the shadow tree was written."
 
 
 (defun xquery-tool-make-namespace-start-string (&optional fn loc namespace)
+  "Combine filename FN, location LOC, and NAMESPACE into a reference att."
   (let ()
     (format " %s:start=\"%s#%s\"" (or namespace xquery-tool-link-namespace) (or fn "") (or loc ""))))
 
