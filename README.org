@@ -1,12 +1,14 @@
 #+TITLE: xquery-tool: A simplistic interface to saxonb's xquery for emacs
 
-There is only one entry point: `xquery-tool-query'.
+After installing, open a buffer containing an xml document, and call:
+~M-x xquery-tool-query~. Then enter an xpath that works for your
+document.
 
 Dependencies (apart from emacs):
 
-- saxon basic (http://saxon.sourceforge.net/; on Debian, `aptitude install libsaxonb-java')
+- saxon basic (http://saxon.sourceforge.net/; on Debian, ~aptitude install libsaxonb-java~)
 
-Calling `M-x xquery-tool-query RET //title RET RET' with this document
+Calling ~M-x xquery-tool-query RET //title RET RET~ with this document
 (see http://www.w3schools.com/xsl/xpath_syntax.asp) open:
 
 #+BEGIN_SRC nxml
@@ -27,6 +29,10 @@ should give you a buffer with these results:
 
 #+BEGIN_SRC nxml
 <?xml version="1.0" encoding="UTF-8"?>
-<title   lang="en">Harry Potter</title>
-<title   lang="en">Learning XML</title>
+<title lang="en">Harry Potter</title>
+<title lang="en">Learning XML</title>
 #+END_SRC
+
+The results are linked back to the original buffer when possible.
+
+[[http://melpa.org/#/xquery-tool][file:http://melpa.org/packages/xquery-tool-badge.svg]]
