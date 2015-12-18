@@ -125,7 +125,7 @@ of elements in the source document are not deleted."
 	 (if (file-exists-p xquery)
 	     xquery
 	   (xquery-tool-setup-xquery-file xquery (buffer-file-name))))
-	(xml-shadow-file (with-current-buffer xml-buff
+	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
 			   (xquery-tool-parse-to-shadow)))
 	process-status)
     (with-current-buffer target-buffer
@@ -163,8 +163,9 @@ namespaces used for constructing the links are removed."
       (save-excursion
 	(goto-char (point-min))
 	(while (xmltok-forward)
-	  (cond
-	   ((and (member xmltok-type '(start-tag empty-element)) (or xmltok-namespace-attributes xmltok-attributes))
+	  (let ((atts
+		 ))
+	  (when (and (member xmltok-type '(start-tag empty-element)) (or xmltok-namespace-attributes xmltok-attributes))
 	    (set-marker current-pos (point))
 	    (dolist (xatt xmltok-attributes)
 	      (when (or (string= (xmltok-attribute-prefix xatt) xquery-tool-link-namespace)
@@ -180,13 +181,10 @@ namespaces used for constructing the links are removed."
 		     'target target)))))
 	    ;; remove all traces of xquery-tool-link-namespace namespace thing
 	    (unless save-namespaces
-	      (save-excursion
-		(save-restriction
-		  (narrow-to-region xmltok-start current-pos)
-		  (xquery-tool-forget-namespace xquery-tool-link-namespace)
-		  (goto-char (point-min))
-		  (while (re-search-forward "\n" nil t)
-		    (join-line)))))
+	      (xquery-tool-forget-namespace (xquery-tool-get-namespace-candidates))
+	      (goto-char xmltok-start)
+	      (while (re-search-forward "\n" current-pos t)
+		(join-line)))
 	    (goto-char current-pos))))
 	(set-marker current-pos nil)))))
 
@@ -214,41 +212,37 @@ namespaces used for constructing the links are removed."
       (error "Can't find file %s" file-name))))
 
 
-(defun xquery-tool-forget-namespace (&optional namespace)
-  "Remove all references to a namespace NAMESPACE.
+(defun xquery-tool-get-namespace-candidates (&optional namespace)
+  "Return a sorted list of atts in NAMESPACE.
 
-Gets rid of namespace declarations and attributes under that
-namespace (not elements, though).
+Default for NAMESPACE is `xquery-tool-link-namespace'.  Will look
+at `xmltok-attributes' and `xmltok-namespace-attributes', so make
+sure xmltok is up to date."
+  (when (member xmltok-type '(start-tag empty-element))
+      (let ((namespace (or namespace xquery-tool-link-namespace)))
+	(sort ;; better sort this explicitly
+	 (mapcar 'cdr;; get all attribute values if they're in the namespace we added
+		 (cl-remove-if 'null
+			       (append
+				(mapcar  (lambda (x) (when (string= (xmltok-attribute-prefix x) namespace)
+						       (cons (xmltok-attribute-prefix x) x))) xmltok-attributes)
+				(mapcar  (lambda (x) (when (string= (xmltok-attribute-local-name x) namespace)
+						       (cons (xmltok-attribute-local-name x) x))) xmltok-namespace-attributes))))
+	 (lambda (x y) (if (> (elt x 0) (elt y 0)) 'yepp))))))
 
-When this function is called, it expects that position in buffer
-and the values xmltok-* have been set up by `xmltok-forward', and
-that the buffer is narrowed to only the start-tag or empty-element."
-  (let* ((el-end (point-marker))
-	 (namespace (or namespace xquery-tool-link-namespace))
-	 (namespace-candidates;; make an alist to look up namespace
-	  (cl-remove-if 'null
-			(append
-			 (mapcar  (lambda (x) (when (string= (xmltok-attribute-prefix x) namespace)
-						(cons (xmltok-attribute-prefix x) x))) xmltok-attributes)
-			 (mapcar  (lambda (x) (when (string= (xmltok-attribute-local-name x) namespace)
-						(cons (xmltok-attribute-local-name x) x))) xmltok-namespace-attributes))))
-	 delete-me)
-    (when namespace-candidates
-      (save-excursion
-	(setq delete-me (pop namespace-candidates))
-	(goto-char (xmltok-attribute-name-start (cdr delete-me)))
-	(delete-region (xmltok-attribute-name-start (cdr delete-me)) (1+ (xmltok-attribute-value-end (cdr delete-me))))
-	(just-one-space)
-	(save-match-data
-	  (save-excursion
-	    (goto-char xmltok-start)
-	    (when (re-search-forward "\\s-+>" el-end t)
-	      (goto-char (- (point) (length (match-string 0))))
-	      (delete-char (1- (length (match-string 0)))))))
-	(when namespace-candidates
-	  (goto-char xmltok-start)
-	  (xmltok-forward)
-	  (xquery-tool-forget-namespace namespace))))))
+
+(defun xquery-tool-forget-namespace (candidates)
+  "Remove all attributes in CANDIDATES.
+
+CANDIDATES is a list of `xmltok-attribute' vectors."
+  (let ()
+    (when candidates
+      (dolist (delete-me candidates)
+	;; (setq delete-me (pop candidates))
+	(goto-char (xmltok-attribute-name-start delete-me))
+	;; delete space before attribute, attribute, and closing quote
+	(delete-region (1- (xmltok-attribute-name-start delete-me)) (1+ (xmltok-attribute-value-end delete-me)))))))
+
 
 
 (defun xquery-tool-setup-xquery-file (xquery &optional xml-file)
@@ -297,8 +291,8 @@ Returns the filename to which the shadow tree was written."
 				   (url-encode-url (buffer-file-name (current-buffer)))
 				 (format "buf://%s" (url-encode-url (buffer-name)))))
 	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
-	(new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
-	(factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
+	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
+	   (factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
       (unless (file-exists-p tmp-file-name)
 	(with-temp-buffer
 	  (insert-buffer-substring-no-properties src-buffer  start end)
@@ -312,7 +306,7 @@ Returns the filename to which the shadow tree was written."
 		  (+ factor
 		     (* -1 (- (point)
 			      (progn
-				(insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file-name xmltok-start))
+				(insert (xquery-tool-make-namespace-start-string original-file-name xmltok-start xquery-tool-link-namespace))
 				(point)))))))
 	  (while (xmltok-forward)
 	    (when (member xmltok-type '(start-tag empty-element))
@@ -322,10 +316,19 @@ Returns the filename to which the shadow tree was written."
 		      (+ factor
 			 (* -1 (- (point)
 				  (progn
-				    (insert (format " %s:start=\"%s#%s\"" xquery-tool-link-namespace original-file-name (- xmltok-start factor)))
+				    (insert (xquery-tool-make-namespace-start-string original-file-name (- xmltok-start factor)  xquery-tool-link-namespace))
 				    (point)))))))))
 	  (write-file tmp-file-name nil)))
       tmp-file-name)))
+
+
+(defun xquery-tool-make-namespace-start-string (&optional fn loc namespace)
+  (let ()
+    (format " %s:start=\"%s#%s\"" (or namespace xquery-tool-link-namespace) (or fn "") (or loc ""))))
+
+;; (xquery-tool-make-namespace-start-string);; " tmplink:start=\"#\""
+;; (xquery-tool-make-namespace-start-string "soup.tmp");; " tmplink:start=\"soup.tmp#\""
+;; (xquery-tool-make-namespace-start-string "soup.tmp" "1234");; " tmplink:start=\"soup.tmp#1234\""
 
 
 (provide 'xquery-tool)
