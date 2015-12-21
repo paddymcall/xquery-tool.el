@@ -255,7 +255,10 @@ If XML-FILE is specified, look at that for namespace declarations."
     (with-current-buffer tmp
       (erase-buffer))
     (when xml-file
-      (with-current-buffer (find-file-noselect xml-file)
+      ;; make sure we have a buffer accessing the file (should work also for indirect or narrowed buffers)
+      (with-current-buffer (cond ((string= (buffer-file-name) xml-file) (current-buffer))
+				 ((file-exists-p xml-file) (find-file-noselect xml-file))
+				 (t (progn (warn "Strange buffer situation: pls file a bug report on github.") (current-buffer))))
 	(save-excursion
 	  (save-restriction
 	    (widen)

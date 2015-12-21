@@ -1,5 +1,7 @@
 ;;; some tests for xquery-tool
 
+;;; run from command line as `emacs -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
+
 (ert-deftest xquery-tool-test-query ()
   "Check general functionality of `xquery-tool-query'.
 Does not check the links, though."
