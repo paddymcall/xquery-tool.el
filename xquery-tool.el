@@ -39,6 +39,7 @@
 ;; (unless (require 'cl-lib nil t)
 ;;   (require 'cl))
 (require 'cl-lib)
+(require 'subr-x)
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
@@ -56,7 +57,7 @@
   "Name of buffer to show results of xqueries in."
   :group 'xquery-tool)
 
-(defcustom xquery-tool-temporary-xquery-file-name "xquery-temp.xq"
+(defcustom xquery-tool-temporary-xquery-file-name "xquery-tool-temp.xq"
   "Filename for storing one-off xqueries.
 It will be created in `temporary-file-directory'."
   :group 'xquery-tool)
@@ -66,7 +67,7 @@ It will be created in `temporary-file-directory'."
 ;; It will be created in `temporary-file-directory'."
 ;;   :group 'xquery-tool)
 
-(defcustom xquery-tool-temporary-xml-file-name "xquery-temp.xml"
+(defcustom xquery-tool-temporary-xml-file-name "xquery-tool-temp.xml"
   "Filename for storing xml that is not in a file (region, e.g.).
 It will be created in `temporary-file-directory'."
   :group 'xquery-tool)
@@ -74,6 +75,11 @@ It will be created in `temporary-file-directory'."
 (defcustom xquery-tool-link-namespace "tmplink"
   "Name of namespace to use for linking xquery results to original file."
   :group 'xquery-tool)
+
+(defcustom xquery-tool-result-root-element-name "xq-tool-results"
+  "Name of root element to use for wrapping results."
+  :group 'xquery-tool
+  :type '(string))
 
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
@@ -103,7 +109,7 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery &optional xml-buff save-namespace)
+(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace)
   "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
@@ -118,12 +124,20 @@ To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
 settings (M-x customize-group RET xquery-tool).
 
-If SAVE-NAMESPACE is not nil (or you use a prefix arg in the
+If WRAP-IN-ROOT is not nil (or you use a prefix arg (`C-u') in
+the interactive call), the results will be wrapped in a root
+element, possibly generating a well-formed XML document for a
+node set.  Configure `xquery-tool-result-root-element-name' to
+choose the element name.
+
+If SAVE-NAMESPACE is not nil (or you use a double prefix arg in the
 interactive call), then the attributes added to enable tracking
 of elements in the source document are not deleted."
   (interactive
-   (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history)))
-     (list xquery (current-buffer) current-prefix-arg)))
+   (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
+	 (wrap (<= 4 (or (car current-prefix-arg) 0)))
+	 (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
+     (list xquery (current-buffer) wrap save-namespace)))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (if (file-exists-p xquery)
@@ -151,6 +165,16 @@ of elements in the source document are not deleted."
     (with-current-buffer target-buffer
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
+      (when wrap-in-root
+	(save-excursion
+	  (goto-char (point-min))
+	  (when (eq (xmltok-forward) 'processing-instruction)
+	    (insert (format "\n<%s>\n" xquery-tool-result-root-element-name))
+	    (goto-char (point-max))
+	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name)))))
+      ;; if wrapped, try nxml
+      (if wrap-in-root (nxml-mode)
+	(fundamental-mode))
       (set-buffer-modified-p nil)
       (read-only-mode))
     (switch-to-buffer-other-window target-buffer)))
@@ -334,6 +358,26 @@ Returns the filename to which the shadow tree was written."
   "Combine filename FN, location LOC, and NAMESPACE into a reference att."
   (let ()
     (format " %s:start=\"%s#%s\"" (or namespace xquery-tool-link-namespace) (or fn "") (or loc ""))))
+
+(defun xquery-tool-wipe-temp-files (files &optional force)
+  "Delete all temporary FILES created by xquery-tool.
+
+If FORCE is non-nil, don't ask for affirmation.  Essentially, all
+/TMPDIR/xquery-tool- files get deleted here."
+  (interactive
+   (let* ((files (directory-files temporary-file-directory 'full "^xquery-tool-"))
+	  (force (when files (yes-or-no-p (format "Delete %s files: %s ? " (length files) (string-join files "; "))))))
+     (list files force)))
+  (let ()
+    (when files
+      (if force
+	  (dolist (file files)
+	    ;; delete by perhaps moving to trash
+	    (delete-file file 'to-trash))))
+    (if (called-interactively-p 'any)
+	(message "No more xquery-tool tmp files."))
+    files))
+
 
 ;; (xquery-tool-make-namespace-start-string);; " tmplink:start=\"#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp");; " tmplink:start=\"soup.tmp#\""
