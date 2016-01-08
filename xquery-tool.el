@@ -35,6 +35,10 @@
 
 (require 'xmltok)
 (require 'url-parse)
+;; Try to load cl-lib, or cl.  Probably this is not a good idea.
+;; (unless (require 'cl-lib nil t)
+;;   (require 'cl))
+(require 'cl-lib)
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
