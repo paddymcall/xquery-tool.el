@@ -200,7 +200,6 @@ used for constructing the links are removed."
 	(xquery-tool-open-location (url-unhex-string target))
       (error "This does not look like an url: %s" target))))
 
-
 (defun xquery-tool-open-location (url)
   "Open the location specified by URL."
   (let ((file-name (url-filename (url-generic-parse-url url)))
@@ -265,7 +264,7 @@ If XML-FILE is specified, look at that for namespace declarations."
 				 (t (progn (warn "Strange buffer situation: pls file a bug report on github.") (current-buffer))))
 	(save-excursion
 	  (save-restriction
-	    (widen)
+	    ;; (widen)
 	    (when (use-region-p) (narrow-to-region (region-beginning) (region-end)))
 	    (goto-char (point-min))
 	    (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag))) t)
