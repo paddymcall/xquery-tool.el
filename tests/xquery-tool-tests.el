@@ -2,16 +2,37 @@
 
 ;;; run from command line as `emacs -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
 
+(require 'format-spec)
+
 (ert-deftest xquery-tool-test-query ()
   "Check general functionality of `xquery-tool-query'.
 Does not check the links, though."
-  (let ((tmp (find-file-noselect (make-temp-file "xquery-test-src")))
+  (xquery-tool-wipe-temp-files 'force)
+  (let* ((tmp (find-file-noselect (make-temp-file "xquery-tool-test-src")))
 	(test-src (file-truename (expand-file-name "simple.xml" (file-name-directory (symbol-file 'xquery-tool-test-query)))))
 	(cases
-	 '(("//price" "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price>$5.95</price>\n<price>$7.95</price>\n<price>$8.95</price>\n<price>$4.50</price>\n<price>$6.95</price>")
-	   ;;; won't pass ---> pid is wrong
-	   ;; ("//price" nil 'save-namespaces "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf://%20*temp*-777077#98\">$5.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf://%20*temp*-777077#302\">$7.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf://%20*temp*-777077#507\">$8.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf://%20*temp*-777077#715\">$4.50</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf://%20*temp*-777077#898\">$6.95</price>")
-	   )))
+	 `(("//price" "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<price>$5.95</price>
+<price>$7.95</price>
+<price>$8.95</price>
+<price>$4.50</price>
+<price>$6.95</price>")
+	   ("//price" nil 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<xq-tool-results>
+
+<price>$5.95</price>
+<price>$7.95</price>
+<price>$8.95</price>
+<price>$4.50</price>
+<price>$6.95</price>
+</xq-tool-results>
+")
+	   ("//price" nil nil 'save-namespace ,(format-spec "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<price xmlns:tmplink=\"potemkin\" tmplink:start=\"%p#98\">$5.95</price>
+<price xmlns:tmplink=\"potemkin\" tmplink:start=\"%p#302\">$7.95</price>
+<price xmlns:tmplink=\"potemkin\" tmplink:start=\"%p#507\">$8.95</price>
+<price xmlns:tmplink=\"potemkin\" tmplink:start=\"%p#715\">$4.50</price>
+<price xmlns:tmplink=\"potemkin\" tmplink:start=\"%p#898\">$6.95</price>" (format-spec-make ?p (buffer-file-name tmp)))))))
     (dolist (case cases)
       (with-current-buffer tmp
 	(erase-buffer)
