@@ -140,7 +140,7 @@ of elements in the source document are not deleted."
      (list xquery (current-buffer) wrap save-namespace)))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
-	 (if (file-exists-p xquery)
+	 (if (and (file-exists-p xquery) (file-regular-p xquery) (file-readable-p xquery))
 	     xquery
 	   (xquery-tool-setup-xquery-file xquery (buffer-file-name))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
