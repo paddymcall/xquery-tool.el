@@ -39,7 +39,6 @@
 ;; (unless (require 'cl-lib nil t)
 ;;   (require 'cl))
 (require 'cl-lib)
-(require 'subr-x)
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
@@ -366,7 +365,7 @@ If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 /TMPDIR/xquery-tool- files get deleted here."
   (interactive
    (let* ((files (directory-files temporary-file-directory 'full "^xquery-tool-"))
-	  (force (when files (yes-or-no-p (format "Delete %s files: %s ? " (length files) (string-join files "; "))))))
+	  (force (when files (yes-or-no-p (format "Delete %s files: %s ? " (length files) (mapconcat 'identity files "; "))))))
      (list files force)))
   (let ()
     (when files

@@ -1,13 +1,13 @@
 ;;; some tests for xquery-tool
 
-;;; run from command line as `emacs -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
+;;; run from command line as `emacs --no-init-file --no-site-file -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
 
 (require 'format-spec)
 
 (ert-deftest xquery-tool-test-query ()
   "Check general functionality of `xquery-tool-query'.
 Does not check the links, though."
-  (xquery-tool-wipe-temp-files 'force)
+  (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
   (let* ((tmp (find-file-noselect (make-temp-file "xquery-tool-test-src")))
 	(test-src (file-truename (expand-file-name "simple.xml" (file-name-directory (symbol-file 'xquery-tool-test-query)))))
 	(cases
