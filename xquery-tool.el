@@ -91,7 +91,7 @@ It will be created in `temporary-file-directory'."
   "Get full path to temporary file with name FN.
 This is where we store the xquery.  Default for FN is
 `xquery-tool-temporary-xquery-file-name'."
-  (let ((fn (or fn xquery-tool-temporary-xquery-file-name)))
+  (let ((fn (format "%s-%s" (or fn xquery-tool-temporary-xquery-file-name) (emacs-pid))))
     (expand-file-name fn temporary-file-directory)))
 
 (defun xquery-tool-indexed-xml-file-name (hash)
@@ -141,7 +141,7 @@ of elements in the source document are not deleted."
 	(xquery-file
 	 (if (and (file-exists-p xquery) (file-regular-p xquery) (file-readable-p xquery))
 	     xquery
-	   (xquery-tool-setup-xquery-file xquery (buffer-file-name))))
+	   (xquery-tool-setup-xquery-file xquery (current-buffer))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
 			   (xquery-tool-parse-to-shadow)))
 	process-status)
@@ -212,31 +212,36 @@ used for constructing the links are removed."
 		(xquery-tool-forget-namespace atts)
 		(goto-char xmltok-start)
 		(while (re-search-forward "\n" current-pos t)
-		  (join-line))))
+		  (join-line))
+		(if (looking-at "\\s-+>") (delete-region (point) (1- (match-end 0))))))
 	    (goto-char current-pos)))
 	(set-marker current-pos nil)))))
 
 (defun xquery-tool-get-and-open-location (position)
   "Find the target to open at POSITION."
-  (let ((target (get-text-property position 'target)))
-    (if (and target (url-generic-parse-url target))
-	(xquery-tool-open-location (url-unhex-string target))
+  (let ((target (url-generic-parse-url (get-text-property position 'target))))
+    (if target
+	(xquery-tool-open-location target)
       (error "This does not look like an url: %s" target))))
 
 (defun xquery-tool-open-location (url)
   "Open the location specified by URL."
-  (let ((file-name (url-filename (url-generic-parse-url url)))
-	(location (string-to-number (url-target (url-generic-parse-url url)))))
-    (if	(find-file-other-window file-name)
+  (let* ((url (if (stringp url) (url-generic-parse-url url) url))
+	 (type (url-type url))
+	 (file-name (decode-coding-string (url-unhex-string (car (url-path-and-query url))) 'utf-8))
+	 (location (string-to-number (url-target url))))
+    (if (cond
+	 ((string= "file" type) (find-file-other-window file-name))
+	 ((string= "buf" type) (pop-to-buffer (get-buffer (substring file-name 1)))))
 	(cond
 	 ((and (>= location (point-min)) (<= location (point-max)))
 	  (goto-char location))
 	 ((buffer-narrowed-p)
 	  (if (yes-or-no-p "Requested location is outside current scope, widen? ")
 	      (progn (widen)
-		    (xquery-tool-open-location url))))
+		     (xquery-tool-open-location url))))
 	 (t (error "Can't find location %s in this buffer" location)))
-      (error "Can't find file %s" file-name))))
+      (warn "No target found for this: %s." (url-recreate-url url)))))
 
 
 (defun xquery-tool-get-namespace-candidates (&optional namespace)
@@ -271,36 +276,35 @@ CANDIDATES is a list of `xmltok-attribute' vectors."
 	(delete-region (1- (xmltok-attribute-name-start delete-me)) (1+ (xmltok-attribute-value-end delete-me)))))))
 
 
-
-(defun xquery-tool-setup-xquery-file (xquery &optional xml-file)
+(defun xquery-tool-setup-xquery-file (xquery &optional xml-buffer-or-file)
   "Construct an xquery file containing XQUERY.
 
-If XML-FILE is specified, look at that for namespace declarations."
+If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
   (let ((tmp (find-file-noselect (xquery-tool-xq-file)))
+	(xml-buff (cond ((null xml-buffer-or-file) (current-buffer))
+			((bufferp xml-buffer-or-file) xml-buffer-or-file)
+			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
+			 (find-file-noselect xml-buffer-or-file))
+			(t (error "Sorry, can't work on this source: %s." xml-buffer-or-file))))
 	namespaces)
     (with-current-buffer tmp
       (erase-buffer))
-    (when xml-file
-      ;; make sure we have a buffer accessing the file (should work also for indirect or narrowed buffers)
-      (with-current-buffer (cond ((string= (buffer-file-name) xml-file) (current-buffer))
-				 ((file-exists-p xml-file) (find-file-noselect xml-file))
-				 (t (progn (warn "Strange buffer situation: pls file a bug report on github.") (current-buffer))))
-	(save-excursion
-	  (save-restriction
-	    ;; (widen)
-	    (when (use-region-p) (narrow-to-region (region-beginning) (region-end)))
-	    (goto-char (point-min))
-	    (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag))) t)
-	    (dolist (naspa-att xmltok-namespace-attributes)
-	      (let ((naspa-val (xmltok-attribute-value naspa-att))
-		    (naspa-name (xmltok-attribute-local-name naspa-att)))
-		(with-current-buffer tmp
-		  (if (string= naspa-name "xmlns")
-		      (insert (format "declare default element namespace \"%s\";\n"
-				      naspa-val))
-		    (insert (format "declare namespace %s=\"%s\";\n"
-				    naspa-name naspa-val))))))
-	    ))))
+    (with-current-buffer xml-buff
+      (save-excursion
+	(save-restriction
+	  ;; (widen)
+	  (when (use-region-p) (narrow-to-region (region-beginning) (region-end)))
+	  (goto-char (point-min))
+	  (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag))) t)
+	  (dolist (naspa-att xmltok-namespace-attributes)
+	    (let ((naspa-val (xmltok-attribute-value naspa-att))
+		  (naspa-name (xmltok-attribute-local-name naspa-att)))
+	      (with-current-buffer tmp
+		(if (string= naspa-name "xmlns")
+		    (insert (format "declare default element namespace \"%s\";\n"
+				    naspa-val))
+		  (insert (format "declare namespace %s=\"%s\";\n"
+				  naspa-name naspa-val)))))))))
     (with-current-buffer tmp
       (insert xquery)
       (save-buffer)
@@ -319,8 +323,8 @@ Returns the filename to which the shadow tree was written."
 	   (end (if (use-region-p) (region-end) (point-max)))
 	   (src-buffer (current-buffer))
 	   (original-file-name (if (buffer-file-name (current-buffer))
-				   (url-encode-url (buffer-file-name (current-buffer)))
-				 (format "buf://%s" (url-encode-url (buffer-name)))))
+				   (url-encode-url (format "file://%s" (buffer-file-name (current-buffer))))
+				 (format "buf:///%s" (url-encode-url (buffer-name)))))
 	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
 	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	   (factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
