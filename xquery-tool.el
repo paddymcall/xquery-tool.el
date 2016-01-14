@@ -80,6 +80,11 @@ It will be created in `temporary-file-directory'."
   :group 'xquery-tool
   :type '(string))
 
+(defcustom xquery-tool-omit-xml-declaration nil
+  "Whether to omit xml-declaration or not in output."
+  :group 'xquery-tool
+  :type '(boolean))
+
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
 
@@ -167,10 +172,13 @@ of elements in the source document are not deleted."
       (when wrap-in-root
 	(save-excursion
 	  (goto-char (point-min))
-	  (when (eq (xmltok-forward) 'processing-instruction)
-	    (insert (format "\n<%s>\n" xquery-tool-result-root-element-name))
-	    (goto-char (point-max))
-	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name)))))
+	  (if (eq (xmltok-forward) 'processing-instruction)
+	      (insert (format "\n<%s>\n" xquery-tool-result-root-element-name))
+	    (goto-char (point-min))
+	    (insert (format "<%s>\n" xquery-tool-result-root-element-name)))
+	  (goto-char (point-max))
+	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name))))
+      
       ;; if wrapped, try nxml
       (if wrap-in-root (nxml-mode)
 	(fundamental-mode))
@@ -306,6 +314,8 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 		  (insert (format "declare namespace %s=\"%s\";\n"
 				  naspa-name naspa-val)))))))))
     (with-current-buffer tmp
+      (when xquery-tool-omit-xml-declaration
+	(insert "declare option saxon:output 'omit-xml-declaration=yes';\n"))
       (insert xquery)
       (save-buffer)
       (buffer-file-name (current-buffer)))))
