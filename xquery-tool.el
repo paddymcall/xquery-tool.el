@@ -85,6 +85,14 @@ It will be created in `temporary-file-directory'."
   :group 'xquery-tool
   :type '(boolean))
 
+(defcustom xquery-tool-resolve-xincludes nil
+  "Whether to resolve xinclude statements before running the query.
+
+Switches on Saxon's '-xi' option, and makes
+`xquery-tool-parse-to-shadow' parse included files."
+  :group 'xquery-tool
+  :type '(boolean))
+
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
 
@@ -162,7 +170,8 @@ of elements in the source document are not deleted."
 			"-classpath" (shell-quote-argument xquery-tool-saxonb-jar)
 			"net.sf.saxon.Query"
 			"-s:-"
-			(format "-q:%s" (shell-quote-argument xquery-file))))
+			(format "-q:%s" (shell-quote-argument xquery-file))
+			(if xquery-tool-resolve-xincludes "-xi:on" "-xi:off")))
     (if (= 0 process-status)
 	(message "Called saxonb, setting up results ...")
       (message "Something went wrong in call to saxonb."))
@@ -337,35 +346,175 @@ Returns the filename to which the shadow tree was written."
 				 (format "buf:///%s" (url-encode-url (buffer-name)))))
 	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
 	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
-	   (factor (- (length new-namespace) (if (use-region-p) (1- (region-beginning)) 0))))
+	   (factor (if (use-region-p) (1- (region-beginning)) 0))
+	   (outside-root t)
+	   namespaces xi-replacement)
       (unless (file-exists-p tmp-file-name)
 	(with-temp-buffer
-	  (insert-buffer-substring-no-properties src-buffer  start end)
+	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
 	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
-	  (save-excursion
-	    (goto-char xmltok-name-end)
-	    (insert new-namespace)
-	    (setq factor
-		  (+ factor
-		     (* -1 (- (point)
-			      (progn
-				(insert (xquery-tool-make-namespace-start-string original-file-name xmltok-start xquery-tool-link-namespace))
-				(point)))))))
-	  (while (xmltok-forward)
-	    (when (member xmltok-type '(start-tag empty-element))
-	      (save-excursion
-		(goto-char xmltok-name-end)
-		(setq factor
-		      (+ factor
-			 (* -1 (- (point)
-				  (progn
-				    (insert (xquery-tool-make-namespace-start-string original-file-name (- xmltok-start factor)  xquery-tool-link-namespace))
-				    (point)))))))))
+	  ;; if this was an xml document, set stuff up
+	  (when (member xmltok-type '(start-tag empty-element))
+	    ;; save namespaces defined on root element
+	    (when (< 0 (length xmltok-namespace-attributes))
+	      (setq namespaces (mapcar (lambda (x)
+					 (cons (xmltok-attribute-local-name x)
+					       (xmltok-attribute-value x)))
+				       xmltok-namespace-attributes)))
+	    ;; add the new namespace we need for tracing
+	    (save-excursion
+	      (goto-char xmltok-name-end)
+	      (insert new-namespace))
+	    ;; `parse' document and add tracers to start-tags and empty elements
+	    (goto-char (point-min));; but start from the top again
+	    (while (xmltok-forward)
+	      (when (member xmltok-type '(start-tag empty-element))
+		;; consider xinclude option
+		(when (and
+		       xquery-tool-resolve-xincludes
+		       (rassoc "http://www.w3.org/2001/XInclude" namespaces)
+		       (string= "include" (xmltok-start-tag-local-name))
+		       (string= (xmltok-start-tag-prefix) (car (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		  (goto-char xmltok-start)
+		  (xmltok-save
+		    (xmltok-forward)
+		    (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
+		  (if (and xi-replacement (file-name-absolute-p xi-replacement))
+		      (setq factor
+			    (+ factor
+			       (abs
+				(- (point-max)
+				   (progn
+				     (xquery-tool-set-attribute "href"
+								xi-replacement
+								(car (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
+				     (point-max))))))
+		    (message "Found xinclude element, but failed to relink it.")))
+		(save-excursion
+		  (goto-char xmltok-name-end)
+		  (setq factor
+			
+			(+ factor
+			   (abs
+			    (-
+			     (point-max)
+			     (progn
+			       (insert (xquery-tool-make-namespace-start-string
+					original-file-name
+					(- xmltok-start factor)
+					xquery-tool-link-namespace))
+			       (point-max)))))))
+		;; after the first start-tag, we need to take account of
+		;; the namespace that was added
+		(when outside-root
+		  (setq factor (+ factor (length new-namespace)))
+		  (setq outside-root nil)))))
 	  (write-file tmp-file-name nil)))
       tmp-file-name)))
 
+(defun xquery-tool-get-attributes (&optional x-atts ignore-namespaces)
+  "Get attributes as an assoc list from X-ATTS (default `xmltok-attributes').
+
+Each element of the list is a cons cell whose cdr holds the value
+of the attribute and whose car specifies the attribute name. This
+car is also a cons cell: its car is the namespace prefix, if any,
+or the empty string \"\". Its cdr is the local name of the
+attribute.
+
+If IGNORE-NAMESPACES is not nil, the prefix is always the empty string."
+  (let ((xmltok-attributes (or x-atts xmltok-attributes)))
+    (nreverse
+     (mapcar (lambda (x)
+	       (cons
+		(cons
+		 (or (cond
+		      (ignore-namespaces "")
+		      (t (or
+			  (xmltok-attribute-prefix x)
+			  (xmltok-start-tag-prefix);; the default might be specified on the element
+			  ""))))
+		 (xmltok-attribute-local-name x))
+		(xmltok-attribute-value x)))
+	     xmltok-attributes))))
+
+(defun xquery-tool-get-attribute (att &optional namespace-prefix x-atts ignore-namespaces)
+  "Get attribute ATT from X-ATTS (default `xmltok-attributes').
+
+If not in the default namespace, specify NAMESPACE-PREFIX.
+
+If IGNORE-NAMESPACES is not nil, namespace prefixes are ignored
+in matching.
+
+Returns the vector in xmltok-attributes's format for which there
+was a match, or nil."
+  (let ((atts (xquery-tool-get-attributes (or x-atts xmltok-attributes) ignore-namespaces))
+	(namespace-prefix (if ignore-namespaces "" (or namespace-prefix (xmltok-start-tag-prefix) "")))
+	(x-atts (or x-atts xmltok-attributes)))
+    (when (assoc (cons namespace-prefix att) atts)
+      (elt x-atts
+	   (1- (length (member
+			(cons (cons namespace-prefix att)
+			      (cdr (assoc (cons namespace-prefix att) atts)))
+			atts)))))))
+
+(defun xquery-tool-set-attribute (att-name val &optional namespace-prefix)
+  "Set the attribute ATT-NAME to value VAL.
+
+If ATT does not exist, it is added, otherwise it is set to value
+VAL. Reparses the element to set up xmltok-attributes to reflect
+the new status."
+  (let ((att (xquery-tool-get-attribute att-name namespace-prefix))
+	(curpos (set-marker (make-marker) (point)))
+	(el-start xmltok-start);; save the element start, nxml might
+			       ;; change this if it fontifies too quickly
+	(prev-point (point)))
+    (unless att
+      (save-excursion
+	(goto-char xmltok-name-end)
+	(insert (format " %s=\"%s\"" att-name val))
+	(goto-char el-start)
+	(xmltok-forward)
+	(setq att (xquery-tool-set-attribute att-name val namespace-prefix))))
+    (when (not (string= val (xmltok-attribute-value att)))
+      (save-excursion
+	(goto-char (xmltok-attribute-value-start att))
+	(delete-region (xmltok-attribute-value-start att)
+		       (xmltok-attribute-value-end att))
+	(insert (format "%s" val))
+	(goto-char el-start)
+	(xmltok-forward)))
+    (xquery-tool-get-attribute att-name namespace-prefix)))
+
+
+(defun xquery-tool-get-xinclude-shadow ()
+  "Follow xinclude element's href and return replacement filename.
+
+This function just looks at the current attributes, and does not
+check whether this is really an xinclude element."
+  (let* ((atts (mapcar (lambda (x)
+			 (cons (xmltok-attribute-local-name x)
+			       (xmltok-attribute-value x)))
+		       xmltok-attributes))
+	 (href (assoc "href" atts))
+	 (parse (assoc "parse" atts))
+	 (filename (car (url-path-and-query (url-generic-parse-url (cdr href))))))
+    (cond
+     ((null href) "");; if there's no href attribute, just use an
+		     ;; empty one; this means the current document,
+		     ;; which gets parsed later on anyway
+     ((and
+       (or (null parse) (string= (cdr parse) "xml"))
+       filename
+       (file-exists-p filename)
+       (file-readable-p filename))
+      (with-current-buffer (find-file-noselect filename)
+	(save-excursion
+	  (save-restriction
+	    (widen)
+	    (xquery-tool-parse-to-shadow)))))
+     (t nil))))
 
 (defun xquery-tool-make-namespace-start-string (&optional fn loc namespace)
   "Combine filename FN, location LOC, and NAMESPACE into a reference att."
