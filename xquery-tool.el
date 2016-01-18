@@ -473,7 +473,7 @@ the new status."
     (unless att
       (save-excursion
 	(goto-char xmltok-name-end)
-	(insert (format " %s=\"%s\"" att-name val))
+	(insert (format " %s%s=\"%s\"" (if namespace-prefix (format "%s:" namespace-prefix) "") att-name val))
 	(goto-char el-start)
 	(xmltok-forward)
 	(setq att (xquery-tool-set-attribute att-name val namespace-prefix))))

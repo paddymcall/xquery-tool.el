@@ -81,3 +81,53 @@ Does not check the links, though."
     (delete-file (buffer-file-name tmp))
     (kill-buffer tmp)))
 
+(ert-deftest xquery-tool-test-set-attribute ()
+  (let ((cases
+	 ;; char args result
+	 '((1 "lang" "en" "xml" ((name ((xml:lang . "en")) "Belgian Waffles")))
+	   (1 "lang" "en" nil ((name ((lang . "en")) "Belgian Waffles"))))))
+    (dolist (case cases)
+      (with-temp-buffer
+	(insert "<name>Belgian Waffles</name>")
+	(should
+	 (equal
+	  (save-excursion
+	    (goto-char (car case))
+	    (xmltok-forward)
+	    (apply 'xquery-tool-set-attribute (butlast (cdr case)))
+	    (xml-parse-region (point-min) (point-max)))
+	  (car (last case))))))))
+
+(ert-deftest xquery-tool-test-get-attributes ()
+  (let ((cases '(("c2-test.xml" 116 ((("xi" . "parse") . "text") (("xi" . "href") . "count.txt")))
+		 ("c3-test.xml" 153 ((("xi" . "parse") . "text") (("xi" . "href") . "data.xml")))
+		 ("simple.xml" 898))))
+    (dolist (case cases)
+      (with-temp-buffer
+	(insert-file-contents
+	 (file-truename
+	  (expand-file-name (car case) (file-name-directory (symbol-file 'xquery-tool-test-query)))))
+	(goto-char (elt case 1))
+	(xmltok-forward)
+	(should (equal (xquery-tool-get-attributes) (elt case 2)))))))
+
+(ert-deftest xquery-tool-test-get-attribute ()
+  (let ((cases '(
+		 ;; default namespace (of element)
+		 ("c2-test.xml" 116 ("href") [128 nil 132 134 143 t nil])
+		 ;; namespace of element
+		 ("c3-test.xml" 153 ("parse" "xi") [181 nil 186 188 192 t nil])
+		 ("c3-test.xml" 153 ("parse") [181 nil 186 188 192 t nil])
+		 ;; nil with namespace
+		 ("c3-test.xml" 153 ("parse" "xml"))
+		 ("simple.xml" 898 ("a")))))
+    (dolist (case cases)
+      (with-temp-buffer
+	(insert-file-contents
+	 (file-truename
+	  (expand-file-name (car case) (file-name-directory (symbol-file 'xquery-tool-test-query)))))
+	(goto-char (elt case 1))
+	(xmltok-forward)
+	(should (equal (apply 'xquery-tool-get-attribute (elt case 2)) (elt case 3)))))))
+
+
