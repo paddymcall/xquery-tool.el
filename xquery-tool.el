@@ -387,7 +387,8 @@ Returns the filename to which the shadow tree was written."
 			       (abs
 				(- (point-max)
 				   (progn
-				     (xquery-tool-set-attribute "href"
+				     (xquery-tool-set-attribute xmltok-start
+								"href"
 								xi-replacement
 								(car (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
 				     (point-max))))))
@@ -395,7 +396,6 @@ Returns the filename to which the shadow tree was written."
 		(save-excursion
 		  (goto-char xmltok-name-end)
 		  (setq factor
-			
 			(+ factor
 			   (abs
 			    (-
@@ -459,33 +459,37 @@ was a match, or nil."
 			      (cdr (assoc (cons namespace-prefix att) atts)))
 			atts)))))))
 
-(defun xquery-tool-set-attribute (att-name val &optional namespace-prefix)
-  "Set the attribute ATT-NAME to value VAL.
+(defun xquery-tool-set-attribute (pos att-name val &optional namespace-prefix)
+  "Set the attribute ATT-NAME to value VAL for the element starting at POS.
 
 If ATT does not exist, it is added, otherwise it is set to value
 VAL. Reparses the element to set up xmltok-attributes to reflect
 the new status."
-  (let ((att (xquery-tool-get-attribute att-name namespace-prefix))
-	(curpos (set-marker (make-marker) (point)))
-	(el-start xmltok-start);; save the element start, nxml might
-			       ;; change this if it fontifies too quickly
-	(prev-point (point)))
-    (unless att
-      (save-excursion
-	(goto-char xmltok-name-end)
-	(insert (format " %s%s=\"%s\"" (if namespace-prefix (format "%s:" namespace-prefix) "") att-name val))
-	(goto-char el-start)
-	(xmltok-forward)
-	(setq att (xquery-tool-set-attribute att-name val namespace-prefix))))
-    (when (not (string= val (xmltok-attribute-value att)))
-      (save-excursion
-	(goto-char (xmltok-attribute-value-start att))
-	(delete-region (xmltok-attribute-value-start att)
-		       (xmltok-attribute-value-end att))
-	(insert (format "%s" val))
-	(goto-char el-start)
-	(xmltok-forward)))
-    (xquery-tool-get-attribute att-name namespace-prefix)))
+  (save-excursion
+    (goto-char pos)
+    (xmltok-forward)
+    (when (member xmltok-type '(start-tag empty-element))
+      (let ((att (xquery-tool-get-attribute att-name namespace-prefix))
+	    (curpos (set-marker (make-marker) (point)))
+	    (el-start xmltok-start);; save the element start, nxml might
+	    ;; change this if it fontifies too quickly
+	    (prev-point (point)))
+	(unless att
+	  (save-excursion
+	    (goto-char xmltok-name-end)
+	    (insert (format " %s%s=\"%s\"" (if namespace-prefix (format "%s:" namespace-prefix) "") att-name val))
+	    (goto-char el-start)
+	    (xmltok-forward)
+	    (setq att (xquery-tool-set-attribute xmltok-start att-name val namespace-prefix))))
+	(when (not (string= val (xmltok-attribute-value att)))
+	  (save-excursion
+	    (goto-char (xmltok-attribute-value-start att))
+	    (delete-region (xmltok-attribute-value-start att)
+			   (xmltok-attribute-value-end att))
+	    (insert (format "%s" val))
+	    (goto-char el-start)
+	    (xmltok-forward)))
+	(xquery-tool-get-attribute att-name namespace-prefix)))))
 
 
 (defun xquery-tool-get-xinclude-shadow ()
