@@ -45,7 +45,6 @@ Does not check the links, though."
 <price>$6.95</price>")
 	   ("//price" nil 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <xq-tool-results>
-
 <price>$5.95</price>
 <price>$7.95</price>
 <price>$8.95</price>
@@ -130,33 +129,47 @@ Does not check the links, though."
 
 
 (ert-deftest xquery-tool-test-xinclude-general ()
-  "Test general functionality of xinclude stuff.
-
-Since the xml:base attributes pointing to temp files aren't
-removed, it's a bit hard to write a test at the moment.  But it
-should work along these lines."
-  :expected-result :failed
+  "Test general functionality of xinclude stuff."
   (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
-  (let ((cases '(("xi-base.xml" "/" ((document
+  (let ((xquery-tool-result-root-element-name "xq-tool-results")
+	(xquery-tool-omit-xml-declaration nil)
+	(xquery-tool-resolve-xincludes t)
+	(cases ;; filename args-for-query result
+	 '(("xi-base.xml" ("/") ((document
 				      ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
 				      "\n  "
 				      (p nil "120 Mz is adequate for an average home user.")
 				      "\n  "
 				      (disclaimer
-				       ((xml:base . "/tmp/xquery-tool-tmp-22946-3f9b445a35f3999b98b2e5dc95b8003f"))
+				       ((xml:base . "file:///home/beta/webstuff/emacs-things/xquery-tool.el/tests/disclaimer.xml"))
 				       "\n      "
 				       (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
 				       "\n   ")
 				      "\n  "
 				      (p nil "Just checking!")
-				      "\n"))))))
+				      "\n")))
+	   ("xi-base.xml" ("//p" nil 'wrap) ((xq-tool-results nil "\n"
+							      (p
+							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+							       "120 Mz is adequate for an average home user.")
+							      "\n"
+							      (p
+							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+							       "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+							      "\n"
+							      (p
+							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+							       "Just checking!")
+							      "\n"))))))
     (dolist (case cases)
-      (let ((xquery-tool-resolve-xincludes 'yes))
-	(with-current-buffer (find-file-noselect
-			      (expand-file-name (car case)
-						(file-name-directory (symbol-file 'xquery-tool-test-query))))
-	  (should
-	   (fail
-	    (progn (xquery-tool-query (elt case 1))
-		   (xml-parse-region))
-	    (car (last case)))))))))
+      (with-current-buffer (find-file-noselect
+			    (expand-file-name (car case)
+					      (file-name-directory (symbol-file 'xquery-tool-test-query))))
+	(should
+	 (equal
+	  (progn (apply 'xquery-tool-query (elt case 1))
+		 ;; (pp (xml-parse-region))
+		 ;; (pp (last case))
+		 (xml-parse-region))
+	  (car (last case))))))))
+

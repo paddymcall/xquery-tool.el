@@ -96,6 +96,9 @@ Switches on Saxon's '-xi' option, and makes
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
 
+(defvar xquery-tool-file-mappings nil
+  "An assoc list of files used and their replacements.")
+
 ;; (defvar xquery-tool-last-xquery-on-full-file nil
 ;;   "If non-nil, the last xquery was run on a full xml document.
 ;; Important for knowing when to regenerate the xml source.")
@@ -179,10 +182,11 @@ of elements in the source document are not deleted."
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
       (when wrap-in-root
+	(switch-to-buffer (current-buffer))
 	(save-excursion
 	  (goto-char (point-min))
 	  (if (eq (xmltok-forward) 'processing-instruction)
-	      (insert (format "\n<%s>\n" xquery-tool-result-root-element-name))
+	      (insert (format "\n<%s>" xquery-tool-result-root-element-name))
 	    (goto-char (point-min))
 	    (insert (format "<%s>\n" xquery-tool-result-root-element-name)))
 	  (goto-char (point-max))
@@ -204,8 +208,11 @@ used for constructing the links are removed."
   (let ((current-pos (make-marker))
 	(target-buffer (if (bufferp target-buffer) target-buffer (current-buffer)))
 	teied-item
-	teied-candidates)
-    (with-current-buffer target-buffer
+	teied-candidates
+	result)
+    (with-temp-buffer
+      (insert-buffer-substring target-buffer)
+      (goto-char (point-min))
       (save-excursion
 	(goto-char (point-min))
 	(while (xmltok-forward)
@@ -227,12 +234,18 @@ used for constructing the links are removed."
 	      ;; remove all traces of xquery-tool-link-namespace namespace thing
 	      (unless save-namespaces
 		(xquery-tool-forget-namespace atts)
+		(xquery-tool-relink-xml-base)
 		(goto-char xmltok-start)
 		(while (re-search-forward "\n" current-pos t)
 		  (join-line))
 		(if (looking-at "\\s-+>") (delete-region (point) (1- (match-end 0))))))
 	    (goto-char current-pos)))
-	(set-marker current-pos nil)))))
+	(set-marker current-pos nil))
+      (setq result (buffer-string))
+      (with-current-buffer target-buffer
+	(erase-buffer)
+	(insert result)))))
+
 
 (defun xquery-tool-get-and-open-location (position)
   "Find the target to open at POSITION."
@@ -290,8 +303,24 @@ CANDIDATES is a list of `xmltok-attribute' vectors."
 	;; (setq delete-me (pop candidates))
 	(goto-char (xmltok-attribute-name-start delete-me))
 	;; delete space before attribute, attribute, and closing quote
-	(delete-region (1- (xmltok-attribute-name-start delete-me)) (1+ (xmltok-attribute-value-end delete-me)))))))
+	(delete-region (1- (xmltok-attribute-name-start delete-me)) (1+ (xmltok-attribute-value-end delete-me))))
+      (save-excursion
+	(goto-char xmltok-start)
+	(xmltok-forward)
+	xmltok-attributes))))
 
+(defun xquery-tool-relink-xml-base ()
+  "Make the @xml:base attribute point at the original file.
+
+POSITION is where the element starts, and defaults to
+xmltok-start."
+  (let ((base (xquery-tool-get-attribute "base" "xml")))
+    (when (and base (rassoc (xmltok-attribute-value base) xquery-tool-file-mappings))
+      (xquery-tool-set-attribute xmltok-start "base" (car (rassoc (xmltok-attribute-value base) xquery-tool-file-mappings)) "xml")
+      (save-excursion
+	(goto-char xmltok-start)
+	(xmltok-forward)
+	xmltok-attributes))))
 
 (defun xquery-tool-setup-xquery-file (xquery &optional xml-buffer-or-file)
   "Construct an xquery file containing XQUERY.
@@ -373,9 +402,9 @@ Returns the filename to which the shadow tree was written."
 	      (when (member xmltok-type '(start-tag empty-element))
 		;; consider xinclude option
 		(when (and
+		       (string= "include" (xmltok-start-tag-local-name))
 		       xquery-tool-resolve-xincludes
 		       (rassoc "http://www.w3.org/2001/XInclude" namespaces)
-		       (string= "include" (xmltok-start-tag-local-name))
 		       (string= (xmltok-start-tag-prefix) (car (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
 		  (goto-char xmltok-start)
 		  (xmltok-save
@@ -411,7 +440,9 @@ Returns the filename to which the shadow tree was written."
 		(when outside-root
 		  (setq factor (+ factor (length new-namespace)))
 		  (setq outside-root nil)))))
-	  (write-file tmp-file-name nil)))
+	  (write-file tmp-file-name nil)
+	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
+	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
       tmp-file-name)))
 
 (defun xquery-tool-get-attributes (&optional x-atts ignore-namespaces)
@@ -529,7 +560,7 @@ check whether this is really an xinclude element."
   "Delete all temporary FILES created by xquery-tool.
 
 If FORCE is non-nil, don't ask for affirmation.  Essentially, all
-/TMPDIR/xquery-tool- files get deleted here."
+/TMPDIR/xquery-tool-* files get deleted here."
   (interactive
    (let* ((files (directory-files temporary-file-directory 'full "^xquery-tool-"))
 	  (force (when files (yes-or-no-p (format "Delete %s files: %s ? " (length files) (mapconcat 'identity files "; "))))))
@@ -540,6 +571,7 @@ If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 	  (dolist (file files)
 	    ;; delete by perhaps moving to trash
 	    (delete-file file 'to-trash))))
+    (setq xquery-tool-file-mappings nil)
     (if (called-interactively-p 'any)
 	(message "No more xquery-tool tmp files."))
     files))
