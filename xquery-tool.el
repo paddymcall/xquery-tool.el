@@ -124,7 +124,7 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace)
+(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results)
   "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
@@ -147,12 +147,17 @@ choose the element name.
 
 If SAVE-NAMESPACE is not nil (or you use a double prefix arg in the
 interactive call), then the attributes added to enable tracking
-of elements in the source document are not deleted."
+of elements in the source document are not deleted.
+
+SHOW-RESULTS, true by default in interactive usage, nil
+otherwise, pops up a buffer showing the results.
+
+The function returns the buffer that the results are in."
   (interactive
    (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
 	 (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	 (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
-     (list xquery (current-buffer) wrap save-namespace)))
+     (list xquery (current-buffer) wrap save-namespace 'show-results)))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (if (and (file-exists-p xquery) (file-regular-p xquery) (file-readable-p xquery))
@@ -196,8 +201,11 @@ of elements in the source document are not deleted."
       (if wrap-in-root (nxml-mode)
 	(fundamental-mode))
       (set-buffer-modified-p nil)
-      (read-only-mode))
-    (switch-to-buffer-other-window target-buffer)))
+      (read-only-mode)
+      (goto-char (point-min)))
+    (when show-results
+      (switch-to-buffer-other-window target-buffer))
+    target-buffer))
 
 (defun xquery-tool-setup-xquery-results (&optional target-buffer save-namespaces)
   "Try to construct links for the results in TARGET-BUFFER.
