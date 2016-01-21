@@ -160,7 +160,7 @@ The function returns the buffer that the results are in."
      (list xquery (current-buffer) wrap save-namespace 'show-results)))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
-	 (if (and (file-exists-p xquery) (file-regular-p xquery) (file-readable-p xquery))
+	 (if (and (file-readable-p xquery) (file-regular-p xquery))
 	     xquery
 	   (xquery-tool-setup-xquery-file xquery (current-buffer))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
