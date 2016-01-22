@@ -3,6 +3,7 @@
 ;;; run from command line as `emacs --no-init-file --no-site-file -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
 
 (require 'format-spec)
+(require 'xml)
 
 (ert-deftest xquery-tool-test-get-namespace-candidates ()
     (let ((cases '(("<TEI xml:id=\"pvv-SARIT\"  xmlns=\"http://www.tei-c.org/ns/1.0\">" . nil)
@@ -18,7 +19,9 @@
 
 (ert-deftest xquery-tool-test-setup-xquery-results ()
   (let
-      ((cases '(("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#98\">$5.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#302\">$7.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#507\">$8.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#715\">$4.50</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#898\">$6.95</price>" . "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price>$5.95</price>\n<price>$7.95</price>\n<price>$8.95</price>\n<price>$4.50</price>\n<price>$6.95</price>"))))
+      ((cases '(
+		("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#98\">$5.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#302\">$7.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#507\">$8.95</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#715\">$4.50</price>\n<price xmlns:tmplink=\"potemkin\" tmplink:start=\"buf:///%20*temp*-777077#898\">$6.95</price>" .
+		 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<price>$5.95</price>\n<price>$7.95</price>\n<price>$8.95</price>\n<price>$4.50</price>\n<price>$6.95</price>"))))
     (dolist (case cases)
       (with-temp-buffer
 	(insert (car case))
@@ -179,4 +182,247 @@ TODO: fix paths so that test passes on different machines."
 		   ;; (pp (last case))
 		   (xml-parse-region)))
 	  (car (last case))))))))
+
+(ert-deftest xquery-tool-test-positions ()
+  "Test whether the links back to the orginal buffer are correct."
+  (let* ((xquery-tool-resolve-xincludes nil)
+	 (test-dir (file-name-as-directory
+		   (concat
+		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+		    "tests")))
+	(cases `(("simple.xml"
+		  ((breakfast_menu
+		    ((tmplink:start . ,(format "file://%ssimple.xml#40" test-dir))
+		     (xmlns:tmplink . "potemkin"))
+		    "\n	"
+		    (food
+		     ((tmplink:start . ,(format "file://%ssimple.xml#58" test-dir)))
+		     "\n		"
+		     (name
+		      ((tmplink:start . ,(format "file://%ssimple.xml#67" test-dir)))
+		      "Belgian Waffles")
+		     "\n		"
+		     (price
+		      ((tmplink:start . ,(format "file://%ssimple.xml#98" test-dir)))
+		      "$5.95")
+		     "\n		"
+		     (description
+		      ((tmplink:start . ,(format "file://%ssimple.xml#121" test-dir)))
+		      "Two of our famous Belgian Waffles with plenty of real maple syrup")
+		     "\n		"
+		     (calories
+		      ((tmplink:start . ,(format "file://%ssimple.xml#216" test-dir)))
+		      "650")
+		     "\n	")
+		    "\n	"
+		    (food
+		     ((tmplink:start . ,(format "file://%ssimple.xml#251" test-dir)))
+		     "\n		"
+		     (name
+		      ((tmplink:start . ,(format "file://%ssimple.xml#260" test-dir)))
+		      "Strawberry Belgian Waffles")
+		     "\n		"
+		     (price
+		      ((tmplink:start . ,(format "file://%ssimple.xml#302" test-dir)))
+		      "$7.95")
+		     "\n		"
+		     (description
+		      ((tmplink:start . ,(format "file://%ssimple.xml#325" test-dir)))
+		      "Light Belgian waffles covered with strawberries and whipped cream")
+		     "\n		"
+		     (calories
+		      ((tmplink:start . ,(format "file://%ssimple.xml#420" test-dir)))
+		      "900")
+		     "\n	")
+		    "\n	"
+		    (food
+		     ((tmplink:start . ,(format "file://%ssimple.xml#455" test-dir)))
+		     "\n		"
+		     (name
+		      ((tmplink:start . ,(format "file://%ssimple.xml#464" test-dir)))
+		      "Berry-Berry Belgian Waffles")
+		     "\n		"
+		     (price
+		      ((tmplink:start . ,(format "file://%ssimple.xml#507" test-dir)))
+		      "$8.95")
+		     "\n		"
+		     (description
+		      ((tmplink:start . ,(format "file://%ssimple.xml#530" test-dir)))
+		      "Light Belgian waffles covered with an assortment of fresh berries and whipped cream")
+		     "\n		"
+		     (calories
+		      ((tmplink:start . ,(format "file://%ssimple.xml#643" test-dir)))
+		      "900")
+		     "\n	")
+		    "\n	"
+		    (food
+		     ((tmplink:start . ,(format "file://%ssimple.xml#678" test-dir)))
+		     "\n		"
+		     (name
+		      ((tmplink:start . ,(format "file://%ssimple.xml#687" test-dir)))
+		      "French Toast")
+		     "\n		"
+		     (price
+		      ((tmplink:start . ,(format "file://%ssimple.xml#715" test-dir)))
+		      "$4.50")
+		     "\n		"
+		     (description
+		      ((tmplink:start . ,(format "file://%ssimple.xml#738" test-dir)))
+		      "Thick slices made from our homemade sourdough bread")
+		     "\n		"
+		     (calories
+		      ((tmplink:start . ,(format "file://%ssimple.xml#819" test-dir)))
+		      "600")
+		     "\n	")
+		    "\n	"
+		    (food
+		     ((tmplink:start . ,(format "file://%ssimple.xml#854" test-dir)))
+		     "\n		"
+		     (name
+		      ((tmplink:start . ,(format "file://%ssimple.xml#863" test-dir)))
+		      "Homestyle Breakfast")
+		     "\n		"
+		     (price
+		      ((tmplink:start . ,(format "file://%ssimple.xml#898" test-dir)))
+		      "$6.95")
+		     "\n		"
+		     (description
+		      ((tmplink:start . ,(format "file://%ssimple.xml#921" test-dir)))
+		      "Two eggs, bacon or sausage, toast, and our ever-popular hash browns")
+		     "\n		"
+		     (calories
+		      ((tmplink:start . ,(format "file://%ssimple.xml#1018" test-dir)))
+		      "950")
+		     "\n	")
+		    "\n")))
+		 ("xi-base.xml"
+		  ((document
+		    ((tmplink:start . ,(format "file://%sxi-base.xml#23" test-dir))
+		     (xmlns:tmplink . "potemkin")
+		     (xmlns:xi . "http://www.w3.org/2001/XInclude"))
+		    "\n  "
+		    (p
+		     ((tmplink:start . ,(format "file://%sxi-base.xml#79" test-dir)))
+		     "120 Mz is adequate for an average home user.")
+		    "\n  "
+		    (xi:include
+		     ((tmplink:start . ,(format "file://%sxi-base.xml#133" test-dir))
+		      ;; this is before we fix up links!
+		      (href . "disclaimer.xml")))
+		    "\n  "
+		    (p
+		     ((tmplink:start . ,(format "file://%sxi-base.xml#171" test-dir)))
+		     "Just checking!")
+		    "\n"))))))
+    (dolist (case cases)
+      (pp (cons "expected" (car (last case))))
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(should
+	 (equal
+	  (with-current-buffer (find-file-noselect (xquery-tool-parse-to-shadow (current-buffer)))
+	    (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    (xml-parse-region (point-min) (point-max)))
+	  (car (last case))))
+	
+	(kill-buffer (current-buffer))))))
+
+
+(ert-deftest xquery-tool-test-positions-narrowed ()
+  "Test whether the links back to the orginal buffer are correct
+when the buffer is narrowed."
+  (let* ((test-dir (file-name-as-directory
+		   (concat
+		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+		    "tests")))
+	(xquery-tool-omit-xml-declaration 'yes)
+	(cases `(
+		 ("simple.xml"
+		  (687 . 712)
+		  ((name
+		    ((tmplink:start . ,(format "file://%ssimple.xml#687" test-dir))
+		     (xmlns:tmplink . "potemkin"))
+		    "French Toast")))
+		 ("simple.xml"
+		  (251 . 453)
+		  ((food
+		    ((tmplink:start . ,(format "file://%ssimple.xml#251" test-dir))
+		     (xmlns:tmplink . "potemkin"))
+		    "\n		"
+		    (name
+		     ((tmplink:start . ,(format "file://%ssimple.xml#260" test-dir)))
+		     "Strawberry Belgian Waffles")
+		    "\n		"
+		    (price
+		     ((tmplink:start . ,(format "file://%ssimple.xml#302" test-dir)))
+		     "$7.95")
+		    "\n		"
+		    (description
+		     ((tmplink:start . ,(format "file://%ssimple.xml#325" test-dir)))
+		     "Light Belgian waffles covered with strawberries and whipped cream")
+		    "\n		"
+		    (calories
+		     ((tmplink:start . ,(format "file://%ssimple.xml#420" test-dir)))
+		     "900")
+		    "\n	"))))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(save-excursion
+	  (save-restriction
+	    (widen)
+	    (narrow-to-region (car (elt case 1)) (cdr (elt case 1)))
+	    (should
+	     (equal
+	      (with-current-buffer (find-file-noselect (xquery-tool-parse-to-shadow (current-buffer)))
+		;; (pp (xml-parse-region (point-min) (point-max)))
+		(xml-parse-region (point-min) (point-max)))
+	      (car (last case))))))))))
+
+(ert-deftest xquery-tool-test-positions-xinclude ()
+  "Test back links for xinclude files."
+  (let* ((test-dir (file-name-as-directory
+		   (concat
+		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+		    "tests")))
+	(xquery-tool-omit-xml-declaration 'yes)
+	(xquery-tool-resolve-xincludes 'yes)
+	(cases `(("xi-base.xml"
+		  ((document
+		    ((xmlns:tmplink . "potemkin")
+		     (xmlns:xi . "http://www.w3.org/2001/XInclude")
+		     (tmplink:start . ,(format "file://%sxi-base.xml#23" test-dir)))
+		    "\n  "
+		    (p
+		     ((tmplink:start . ,(format "file://%sxi-base.xml#79" test-dir)))
+		     "120 Mz is adequate for an average home user.")
+		    "\n  "
+		    (disclaimer
+		     ((tmplink:start . ,(format "file://%sdisclaimer.xml#23" test-dir))
+		      (xml:base . ,(xquery-tool-indexed-xml-file-name "3f9b445a35f3999b98b2e5dc95b8003f")))
+		     "\n      "
+		     (p
+		      ((tmplink:start . ,(format "file://%sdisclaimer.xml#38" test-dir)))
+		      "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+		     "\n   ")
+		    "\n  "
+		    (p
+		     ((tmplink:start . ,(format "file://%sxi-base.xml#171" test-dir)))
+		     "Just checking!")
+		    "\n"))))))
+    (dolist (case cases)
+      ;; (pp (cons "expected" (car (last case))))
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query "/" (current-buffer) nil 'save nil)
+	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    (xml-parse-region (point-min) (point-max)))
+	  (car (last case))))))))
+
+
+
+
+
 

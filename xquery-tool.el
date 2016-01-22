@@ -372,7 +372,6 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
       (save-buffer)
       (buffer-file-name (current-buffer)))))
 
-;; Based on `tei-edit-parse-to-shadow'.
 (defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
   "Make XMLBUFFER (default `current-buffer') traceable.
 
@@ -389,7 +388,13 @@ Returns the filename to which the shadow tree was written."
 				 (format "buf:///%s" (url-encode-url (buffer-name)))))
 	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
 	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
-	   (factor (if (use-region-p) (1- (region-beginning)) 0))
+	   ;; absolute start of buffer (-1)
+	   (buffer-offset (cond
+		    ((use-region-p) (1- (region-beginning)))
+		    ((buffer-narrowed-p) (1- (point)))
+		    (t 0)))
+	   ;; how much the buffer grows from insertions
+	   (grow-factor 0)
 	   (outside-root t)
 	   namespaces xi-replacement)
       (unless (file-exists-p tmp-file-name)
@@ -425,8 +430,8 @@ Returns the filename to which the shadow tree was written."
 		    (xmltok-forward)
 		    (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
 		  (if (and xi-replacement (file-name-absolute-p xi-replacement))
-		      (setq factor
-			    (+ factor
+		      (setq grow-factor
+			    (+ grow-factor
 			       (abs
 				(- (point-max)
 				   (progn
@@ -438,21 +443,21 @@ Returns the filename to which the shadow tree was written."
 		    (message "Found xinclude element, but failed to relink it.")))
 		(save-excursion
 		  (goto-char xmltok-name-end)
-		  (setq factor
-			(+ factor
+		  (setq grow-factor;; adjust grow-factor for length of insertion
+			(+ grow-factor
 			   (abs
 			    (-
 			     (point-max)
 			     (progn
 			       (insert (xquery-tool-make-namespace-start-string
 					original-file-name
-					(- xmltok-start factor)
+					(+ (- xmltok-start grow-factor) buffer-offset)
 					xquery-tool-link-namespace))
 			       (point-max)))))))
 		;; after the first start-tag, we need to take account of
 		;; the namespace that was added
 		(when outside-root
-		  (setq factor (+ factor (length new-namespace)))
+		  (setq grow-factor (+ grow-factor (length new-namespace)))
 		  (setq outside-root nil)))))
 	  (write-file tmp-file-name nil)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
@@ -570,19 +575,22 @@ check whether this is really an xinclude element."
   (let ()
     (format " %s:start=\"%s#%s\"" (or namespace xquery-tool-link-namespace) (or fn "") (or loc ""))))
 
-(defun xquery-tool-wipe-temp-files (files &optional force)
-  "Delete all temporary FILES created by xquery-tool.
+(defun xquery-tool-wipe-temp-files (&optional files force)
+  "Delete temporary FILES created by xquery-tool, and kill visiting buffers.
 
 If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 /TMPDIR/xquery-tool-* files get deleted here."
   (interactive
    (let* ((files (directory-files temporary-file-directory 'full "^xquery-tool-"))
-	  (force (when files (yes-or-no-p (format "Delete %s files: %s ? " (length files) (mapconcat 'identity files "; "))))))
+	  (force (when files (yes-or-no-p (format "Delete %s files (and visiting buffers): \n -%s\n ? " (length files) (mapconcat 'identity files "\n -"))))))
      (list files force)))
-  (let ()
+  (let ((files (or files (directory-files temporary-file-directory 'full "^xquery-tool-"))))
     (when files
       (if force
 	  (dolist (file files)
+	    ;; kill buffer
+	    (while (find-buffer-visiting file)
+	      (kill-buffer (find-buffer-visiting file)))
 	    ;; delete by perhaps moving to trash
 	    (delete-file file 'to-trash))))
     (setq xquery-tool-file-mappings nil)
