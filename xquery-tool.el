@@ -154,10 +154,14 @@ otherwise, pops up a buffer showing the results.
 
 The function returns the buffer that the results are in."
   (interactive
-   (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
-	 (wrap (<= 4 (or (car current-prefix-arg) 0)))
-	 (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
-     (list xquery (current-buffer) wrap save-namespace 'show-results)))
+   (progn
+     (unless (eq major-mode 'nxml-mode)
+       (if (yes-or-no-p "Are you sure this is an XML buffer? ")
+	   t (error "Please call `xquery-tool-query' from a buffer visiting an XML document.")))
+     (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
+	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
+	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
+       (list xquery (current-buffer) wrap save-namespace 'show-results))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (if (and (file-readable-p xquery) (file-regular-p xquery))
@@ -196,7 +200,6 @@ The function returns the buffer that the results are in."
 	    (insert (format "<%s>\n" xquery-tool-result-root-element-name)))
 	  (goto-char (point-max))
 	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name))))
-      
       ;; if wrapped, try nxml
       (if wrap-in-root (nxml-mode)
 	(fundamental-mode))
@@ -204,7 +207,10 @@ The function returns the buffer that the results are in."
       (read-only-mode)
       (goto-char (point-min)))
     (when show-results
-      (switch-to-buffer-other-window target-buffer))
+      (display-buffer target-buffer
+		      `((display-buffer-reuse-window
+			 display-buffer-in-previous-window
+			 display-buffer-use-some-window) . ((inhibit-same-window . t) (reusable-frames . ,(frame-list))))))
     target-buffer))
 
 (defun xquery-tool-setup-xquery-results (&optional target-buffer save-namespaces)
