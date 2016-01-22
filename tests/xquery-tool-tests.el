@@ -133,19 +133,22 @@ Does not check the links, though."
   "Test general functionality of xinclude stuff.
 
 TODO: fix paths so that test passes on different machines."
-  :expected-result :failed
   (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
-  (let ((xquery-tool-result-root-element-name "xq-tool-results")
+  (let* ((xquery-tool-result-root-element-name "xq-tool-results")
 	(xquery-tool-omit-xml-declaration nil)
 	(xquery-tool-resolve-xincludes t)
+	(test-dir (file-name-as-directory
+		   (concat
+		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+		    "tests")))
 	(cases ;; filename args-for-query result
-	 '(("xi-base.xml" ("/") ((document
+	 `(("xi-base.xml" ("/") ((document
 				      ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
 				      "\n  "
 				      (p nil "120 Mz is adequate for an average home user.")
 				      "\n  "
 				      (disclaimer
-				       ((xml:base . "file:///home/beta/webstuff/emacs-things/xquery-tool.el/tests/disclaimer.xml"))
+				       ((xml:base . ,(format "file://%sdisclaimer.xml" test-dir)))
 				       "\n      "
 				       (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
 				       "\n   ")
