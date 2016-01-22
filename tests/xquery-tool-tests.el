@@ -315,18 +315,16 @@ TODO: fix paths so that test passes on different machines."
 		     "Just checking!")
 		    "\n"))))))
     (dolist (case cases)
-      (pp (cons "expected" (car (last case))))
+      ;; (pp (cons "expected" (car (last case))))
       (xquery-tool-wipe-temp-files nil 'force)
       (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
 	(should
 	 (equal
 	  (with-current-buffer (find-file-noselect (xquery-tool-parse-to-shadow (current-buffer)))
-	    (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
 	    (xml-parse-region (point-min) (point-max)))
-	  (car (last case))))
-	
+	  (car (last case))))	
 	(kill-buffer (current-buffer))))))
-
 
 (ert-deftest xquery-tool-test-positions-narrowed ()
   "Test whether the links back to the orginal buffer are correct
