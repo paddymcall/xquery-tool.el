@@ -135,6 +135,13 @@ XML-BUFF should be a buffer containing an xml document and
 defaults to the current buffer.  If a region is active, it will
 operate only on that region.
 
+If the result contains element nodes, the function tries to link
+them back to the source. This is quite brittle.  If it is
+possible to create links, they are to the position (as returned
+by `point') in the source file or buffer.  This means that if
+something before that point is changed, all links to points after
+that position will stop working.
+
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
 settings (M-x customize-group RET xquery-tool).
