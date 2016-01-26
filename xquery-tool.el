@@ -246,7 +246,7 @@ used for constructing the links are removed."
 	      (when (= 1 (length start-att))
 		(setq target (xmltok-attribute-value (elt start-att 0)))
 		(make-text-button
-		 (1+ xmltok-start)
+		 xmltok-start
 		 xmltok-name-end
 		 'help-echo (format "Try to go to %s." target)
 		 'action 'xquery-tool-get-and-open-location
@@ -610,6 +610,26 @@ If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 ;; (xquery-tool-make-namespace-start-string "soup.tmp");; " tmplink:start=\"soup.tmp#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp" "1234");; " tmplink:start=\"soup.tmp#1234\""
 
+(defun xquery-tool-check-status ()
+  "Check if necessary files for xquery-tool are accessible.
+
+Useful for error reporting."
+  (interactive)
+  (let ((buf (get-buffer-create "*xquery-tool-status*")))
+    (with-current-buffer buf
+      (erase-buffer)
+      (dolist (item (list 'xquery-tool-java-binary 'xquery-tool-saxonb-jar))
+	(let ((val (symbol-value item)))
+	  (pp (list item val
+		    (file-exists-p val)
+		    (file-regular-p val)
+		    (file-readable-p val)
+		    (file-executable-p val)
+		    (file-modes val)
+		    (file-attributes val))
+	      (current-buffer))))
+      (insert (format "maybe java: %s" (executable-find "java")))
+      (switch-to-buffer buf))))
 
 (provide 'xquery-tool)
 
