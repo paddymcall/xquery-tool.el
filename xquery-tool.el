@@ -167,7 +167,7 @@ The function returns the buffer that the results are in."
 	   t (error "Please call `xquery-tool-query' from a buffer visiting an XML document.")))
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
-	 (error "Please run M-x customize `%s' (current value \"%s\" is not an accessible file)" i (symbol-value i))))
+	 (warn "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
      (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
