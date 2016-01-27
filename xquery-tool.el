@@ -40,6 +40,7 @@
 ;;   (require 'cl))
 (require 'cl-lib)
 
+;;;###autoload
 (defgroup xquery-tool nil
   "Customization group for the xquery-tool."
   :group 'external
