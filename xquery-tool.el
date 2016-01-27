@@ -200,7 +200,7 @@ The function returns the buffer that the results are in."
 			target-buffer;; destination
 			nil;; update display
 			;; args
-			"-classpath" (shell-quote-argument xquery-tool-saxonb-jar)
+			"-classpath" xquery-tool-saxonb-jar
 			"net.sf.saxon.Query"
 			"-s:-"
 			(format "-q:%s" (shell-quote-argument xquery-file))
