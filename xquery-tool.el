@@ -43,14 +43,14 @@
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
   :group 'xquery-tool
-  :type '(file))
+  :type '(file :must-match t))
 
 ;; (setq xquery-tool-java-binary "/usr/bin/java")
 
 (defcustom xquery-tool-saxonb-jar "/usr/share/java/saxonb.jar"
   "Full path of the saxonb.jar on your system."
   :group 'xquery-tool
-  :type '(file))
+  :type '(file :must-match t))
 
 (defcustom xquery-tool-result-buffer-name "*xquery-tool results*"
   "Name of buffer to show results of xqueries in."
@@ -165,6 +165,9 @@ The function returns the buffer that the results are in."
      (unless (eq major-mode 'nxml-mode)
        (if (yes-or-no-p "Are you sure this is an XML buffer? ")
 	   t (error "Please call `xquery-tool-query' from a buffer visiting an XML document.")))
+     (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
+       (unless (file-readable-p (symbol-value i))
+	 (error "Please run M-x customize `%s' (current value \"%s\" is not an accessible file)" i (symbol-value i))))
      (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
@@ -605,10 +608,11 @@ If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 	(message "No more xquery-tool tmp files."))
     files))
 
-
 ;; (xquery-tool-make-namespace-start-string);; " tmplink:start=\"#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp");; " tmplink:start=\"soup.tmp#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp" "1234");; " tmplink:start=\"soup.tmp#1234\""
+
+;;; help
 
 (defun xquery-tool-check-status ()
   "Check if necessary files for xquery-tool are accessible.
