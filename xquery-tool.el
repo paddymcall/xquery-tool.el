@@ -201,7 +201,6 @@ The function returns the buffer that the results are in."
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
       (when wrap-in-root
-	(switch-to-buffer (current-buffer))
 	(save-excursion
 	  (goto-char (point-min))
 	  (if (eq (xmltok-forward) 'processing-instruction)
