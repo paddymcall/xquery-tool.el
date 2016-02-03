@@ -40,6 +40,12 @@
 ;;   (require 'cl))
 (require 'cl-lib)
 
+;;;###autoload
+(defgroup xquery-tool nil
+  "Customization group for the xquery-tool."
+  :group 'external
+  :prefix 'xquery-tool-)
+
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
   :group 'xquery-tool
@@ -48,7 +54,11 @@
 ;; (setq xquery-tool-java-binary "/usr/bin/java")
 
 (defcustom xquery-tool-saxonb-jar "/usr/share/java/saxonb.jar"
-  "Full path of the saxonb.jar on your system."
+  "Full path of the saxonb.jar on your system.
+
+Saxon-B can be obtained from various sources, for example:
+- http://sourceforge.net/projects/saxon/files/
+- https://packages.debian.org/search?keywords=libsaxonb-java"
   :group 'xquery-tool
   :type '(file :must-match t))
 
@@ -136,7 +146,7 @@ defaults to the current buffer.  If a region is active, it will
 operate only on that region.
 
 If the result contains element nodes, the function tries to link
-them back to the source. This is quite brittle.  If it is
+them back to the source.  This is quite brittle.  If it is
 possible to create links, they are to the position (as returned
 by `point') in the source file or buffer.  This means that if
 something before that point is changed, all links to points after
@@ -164,7 +174,8 @@ The function returns the buffer that the results are in."
    (progn
      (unless (eq major-mode 'nxml-mode)
        (if (yes-or-no-p "Are you sure this is an XML buffer? ")
-	   t (error "Please call `xquery-tool-query' from a buffer visiting an XML document.")))
+	   t
+	 (error "Please call `xquery-tool-query' from a buffer visiting an XML document")))
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
 	 (warn "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
@@ -189,7 +200,7 @@ The function returns the buffer that the results are in."
 			target-buffer;; destination
 			nil;; update display
 			;; args
-			"-classpath" (shell-quote-argument xquery-tool-saxonb-jar)
+			"-classpath" xquery-tool-saxonb-jar
 			"net.sf.saxon.Query"
 			"-s:-"
 			(format "-q:%s" (shell-quote-argument xquery-file))
@@ -354,7 +365,7 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 			((bufferp xml-buffer-or-file) xml-buffer-or-file)
 			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
 			 (find-file-noselect xml-buffer-or-file))
-			(t (error "Sorry, can't work on this source: %s." xml-buffer-or-file))))
+			(t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
 	namespaces)
     (with-current-buffer tmp
       (erase-buffer))
@@ -477,7 +488,7 @@ Returns the filename to which the shadow tree was written."
   "Get attributes as an assoc list from X-ATTS (default `xmltok-attributes').
 
 Each element of the list is a cons cell whose cdr holds the value
-of the attribute and whose car specifies the attribute name. This
+of the attribute and whose car specifies the attribute name.  This
 car is also a cons cell: its car is the namespace prefix, if any,
 or the empty string \"\". Its cdr is the local name of the
 attribute.
@@ -499,14 +510,16 @@ If IGNORE-NAMESPACES is not nil, the prefix is always the empty string."
 	     xmltok-attributes))))
 
 (defun xquery-tool-get-attribute (att &optional namespace-prefix x-atts ignore-namespaces)
-  "Get attribute ATT from X-ATTS (default `xmltok-attributes').
+  "Get attribute ATT.
 
 If not in the default namespace, specify NAMESPACE-PREFIX.
+
+The default for X-ATTS is `xmltok-attributes'.
 
 If IGNORE-NAMESPACES is not nil, namespace prefixes are ignored
 in matching.
 
-Returns the vector in xmltok-attributes's format for which there
+Returns the vector in the format of `xmltok-attributes' if there
 was a match, or nil."
   (let ((atts (xquery-tool-get-attributes (or x-atts xmltok-attributes) ignore-namespaces))
 	(namespace-prefix (if ignore-namespaces "" (or namespace-prefix (xmltok-start-tag-prefix) "")))
@@ -519,10 +532,13 @@ was a match, or nil."
 			atts)))))))
 
 (defun xquery-tool-set-attribute (pos att-name val &optional namespace-prefix)
-  "Set the attribute ATT-NAME to value VAL for the element starting at POS.
+  "For the element at position POS, set attribute ATT-NAME to value VAL.
+
+NAMESPACE-PREFIX contains the namespace-prefix to use (default
+empty).
 
 If ATT does not exist, it is added, otherwise it is set to value
-VAL. Reparses the element to set up xmltok-attributes to reflect
+VAL.  Reparses the element to set up `xmltok-attributes' to reflect
 the new status."
   (save-excursion
     (goto-char pos)
