@@ -280,7 +280,6 @@ used for constructing the links are removed."
 	(erase-buffer)
 	(insert result)))))
 
-
 (defun xquery-tool-get-and-open-location (position)
   "Find the target to open at POSITION."
   (let ((target (url-generic-parse-url (get-text-property position 'target))))
@@ -307,7 +306,6 @@ used for constructing the links are removed."
 	 (t (error "Can't find location %s in this buffer" location)))
       (warn "No target found for this: %s." (url-recreate-url url)))))
 
-
 (defun xquery-tool-get-namespace-candidates (&optional namespace)
   "Return a sorted list of atts in NAMESPACE.
 
@@ -325,7 +323,6 @@ sure xmltok is up to date."
 				(mapcar  (lambda (x) (when (string= (xmltok-attribute-local-name x) namespace)
 						       (cons (xmltok-attribute-local-name x) x))) xmltok-namespace-attributes))))
 	 (lambda (x y) (if (> (elt x 0) (elt y 0)) 'yepp))))))
-
 
 (defun xquery-tool-forget-namespace (candidates)
   "Remove all attributes in CANDIDATES.
@@ -372,8 +369,8 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
     (with-current-buffer xml-buff
       (save-excursion
 	(save-restriction
-	  ;; (widen)
-	  (when (use-region-p) (narrow-to-region (region-beginning) (region-end)))
+	  ;; make sure to pick up namespaces on root element
+	  (widen)
 	  (goto-char (point-min))
 	  (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag))) t)
 	  (dolist (naspa-att xmltok-namespace-attributes)
@@ -418,6 +415,20 @@ Returns the filename to which the shadow tree was written."
 	   (outside-root t)
 	   namespaces xi-replacement)
       (unless (file-exists-p tmp-file-name)
+	;; get namespaces from root, if necessary
+	(with-current-buffer src-buffer
+	  (when (or (buffer-narrowed-p) (use-region-p))
+	    (save-excursion
+	      (save-restriction
+		(when (buffer-narrowed-p) (widen))
+		(goto-char (point-min))
+		(while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element)))) t)
+		(when (< 0 (length xmltok-namespace-attributes))
+		  (setq namespaces (mapcar (lambda (x)
+					     (cons
+					      (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
+					      (xmltok-attribute-value x)))
+					   xmltok-namespace-attributes)))))))
 	(with-temp-buffer
 	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
@@ -427,14 +438,22 @@ Returns the filename to which the shadow tree was written."
 	  (when (member xmltok-type '(start-tag empty-element))
 	    ;; save namespaces defined on root element
 	    (when (< 0 (length xmltok-namespace-attributes))
-	      (setq namespaces (mapcar (lambda (x)
-					 (cons (xmltok-attribute-local-name x)
-					       (xmltok-attribute-value x)))
-				       xmltok-namespace-attributes)))
+	      (mapcar (lambda (x)
+			(setq namespaces
+			      (add-to-list 'namespaces
+					   (cons
+					    (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
+					    (xmltok-attribute-value x)))))
+		      xmltok-namespace-attributes))
 	    ;; add the new namespace we need for tracing
 	    (save-excursion
 	      (goto-char xmltok-name-end)
-	      (insert new-namespace))
+	      (insert new-namespace)
+	      (when (with-current-buffer src-buffer
+		      (or (buffer-narrowed-p) (use-region-p)))
+		(mapcar (lambda (nsp) (insert (format " %s:%s=\"%s\"" (caar nsp) (cdar nsp)
+						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
+			namespaces)))
 	    ;; `parse' document and add tracers to start-tags and empty elements
 	    (goto-char (point-min));; but start from the top again
 	    (while (xmltok-forward)
@@ -444,7 +463,7 @@ Returns the filename to which the shadow tree was written."
 		       (string= "include" (xmltok-start-tag-local-name))
 		       xquery-tool-resolve-xincludes
 		       (rassoc "http://www.w3.org/2001/XInclude" namespaces)
-		       (string= (xmltok-start-tag-prefix) (car (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		       (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
 		  (goto-char xmltok-start)
 		  (xmltok-save
 		    (xmltok-forward)
@@ -458,7 +477,7 @@ Returns the filename to which the shadow tree was written."
 				     (xquery-tool-set-attribute xmltok-start
 								"href"
 								xi-replacement
-								(car (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
+								(cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
 				     (point-max))))))
 		    (message "Found xinclude element, but failed to relink it.")))
 		(save-excursion

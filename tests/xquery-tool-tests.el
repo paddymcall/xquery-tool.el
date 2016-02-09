@@ -5,6 +5,13 @@
 (require 'format-spec)
 (require 'xml)
 
+(defun xquery-tool-get-test-dir ()
+  "Find directory containing tests."
+  (file-name-as-directory
+   (concat
+    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+    "tests")))
+
 (ert-deftest xquery-tool-test-get-namespace-candidates ()
     (let ((cases '(("<TEI xml:id=\"pvv-SARIT\"  xmlns=\"http://www.tei-c.org/ns/1.0\">" . nil)
 		   ("<TEI xmlns:tmplink=\"potemkin\" tmplink:start=\"pramanavarttikavrtti.xml#3064\" xml:id=\"pvv-SARIT\"  xmlns=\"http://www.tei-c.org/ns/1.0\">" . ([31 38 44 46 75 t nil] [6 11 19 21 29 t nil]))
@@ -379,10 +386,7 @@ when the buffer is narrowed."
 
 (ert-deftest xquery-tool-test-positions-xinclude ()
   "Test back links for xinclude files."
-  (let* ((test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+  (let* ((test-dir (xquery-tool-get-test-dir))
 	(xquery-tool-omit-xml-declaration 'yes)
 	(xquery-tool-resolve-xincludes 'yes)
 	(cases `(("xi-base.xml"
@@ -415,9 +419,39 @@ when the buffer is narrowed."
 	(should
 	 (equal
 	  (with-current-buffer (xquery-tool-query "/" (current-buffer) nil 'save nil)
-	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    ;;(pp (cons "result" (xml-parse-region (point-min) (point-max))))
 	    (xml-parse-region (point-min) (point-max)))
 	  (car (last case))))))))
+
+(ert-deftest xquery-tool-test-namespace-fun ()
+  "Test things on a seriously namespaced document."
+  (let* ((test-dir (xquery-tool-get-test-dir))
+	(xquery-tool-result-root-element-name 'beep)
+	(xquery-tool-omit-xml-declaration t)
+	(cases `(("namespace-test.xml";; actually a libreoffice document
+		 (2209 . 2858);; range to work on
+		 "//text()";; query
+		 ;; result
+		 ((,xquery-tool-result-root-element-name nil "
+sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+")))
+		 ("namespace-test.xml";; actually a libreoffice document
+		 nil;; range to work on
+		 "//office:meta//text()";; query
+		 ;; result; same as for narrowed above
+		 ((,xquery-tool-result-root-element-name nil "
+sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+"))))))    
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(when (consp (elt case 1)) (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
+	    ;;(pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    (xml-parse-region (point-min) (point-max)))
+	  (elt case 3)))))))
 
 
 
