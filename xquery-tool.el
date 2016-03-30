@@ -221,7 +221,8 @@ The function returns the buffer that the results are in."
 	  (goto-char (point-max))
 	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name))))
       ;; if wrapped, try nxml
-      (if wrap-in-root (nxml-mode)
+      (if (and wrap-in-root (functionp 'nxml-mode))
+	  (nxml-mode)
 	(fundamental-mode))
       (set-buffer-modified-p nil)
       (read-only-mode)
@@ -357,11 +358,11 @@ xmltok-start."
   "Construct an xquery file containing XQUERY.
 
 If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
-  (let ((tmp (find-file-noselect (xquery-tool-xq-file)))
+  (let ((tmp (find-file-noselect (xquery-tool-xq-file) 'nowarn 'raw))
 	(xml-buff (cond ((null xml-buffer-or-file) (current-buffer))
 			((bufferp xml-buffer-or-file) xml-buffer-or-file)
 			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
-			 (find-file-noselect xml-buffer-or-file))
+			 (find-file-noselect xml-buffer-or-file 'nowarn 'raw))
 			(t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
 	namespaces)
     (with-current-buffer tmp
@@ -479,7 +480,7 @@ Returns the filename to which the shadow tree was written."
 								xi-replacement
 								(cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
 				     (point-max))))))
-		    (message "Found xinclude element, but failed to relink it.")))
+		    (warn "Failed to relink xinclude: %s" xi-replacement)))
 		(save-excursion
 		  (goto-char xmltok-name-end)
 		  (setq grow-factor;; adjust grow-factor for length of insertion
@@ -607,7 +608,7 @@ check whether this is really an xinclude element."
        filename
        (file-exists-p filename)
        (file-readable-p filename))
-      (with-current-buffer (find-file-noselect filename)
+      (with-current-buffer (find-file-noselect filename 'nowarn 'raw)
 	(save-excursion
 	  (save-restriction
 	    (widen)
