@@ -196,18 +196,18 @@ The function returns the buffer that the results are in."
       (erase-buffer))
     (setq process-status
 	  (call-process xquery-tool-java-binary ;; program
-			xml-shadow-file     ;; infile
+			nil ;; xml-shadow-file     ;; infile
 			target-buffer;; destination
 			nil;; update display
 			;; args
 			"-classpath" xquery-tool-saxonb-jar
 			"net.sf.saxon.Query"
-			"-s:-"
+			;; "-s:-"
 			(format "-q:%s" xquery-file)
 			(if xquery-tool-resolve-xincludes "-xi:on" "-xi:off")))
     (if (= 0 process-status)
 	(message "Called saxonb, setting up results ...")
-      (message "Something went wrong in call to saxonb."))
+      (error "Something went wrong in call to saxonb, status %s" process-status))
     (with-current-buffer target-buffer
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
@@ -364,10 +364,12 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
 			 (find-file-noselect xml-buffer-or-file 'nowarn 'raw))
 			(t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
-	namespaces)
+	(xquery (if (string-match "^/\\([^/]\\|$\\)" xquery) (substring xquery 1) xquery))
+	namespaces hashsum)
     (with-current-buffer tmp
       (erase-buffer))
     (with-current-buffer xml-buff
+      (setq hashsum (secure-hash 'md5 (current-buffer) (point-min) (point-max)))
       (save-excursion
 	(save-restriction
 	  ;; make sure to pick up namespaces on root element
@@ -384,8 +386,13 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 		  (insert (format "declare namespace %s=\"%s\";\n"
 				  naspa-name naspa-val)))))))))
     (with-current-buffer tmp
+      (insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n") 
       (when xquery-tool-omit-xml-declaration
-	(insert "declare option saxon:output 'omit-xml-declaration=yes';\n"))
+	;; fix for saxon (does not respect standard output option?)
+	(insert "declare namespace saxon=\"http://saxon.sf.net/\";\n") 
+	(insert "declare option saxon:output \"omit-xml-declaration=yes\";")
+	(insert "declare option output:omit-xml-declaration \"yes\";\n"))
+      (insert (format "root(doc(\"%s\"))" (xquery-tool-indexed-xml-file-name hashsum)))
       (insert xquery)
       (save-buffer)
       (buffer-file-name (current-buffer)))))

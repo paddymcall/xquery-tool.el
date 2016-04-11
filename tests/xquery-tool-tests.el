@@ -91,6 +91,8 @@ Does not check the links, though."
     (delete-file (buffer-file-name tmp))
     (kill-buffer tmp)))
 
+;; (ert "xquery-tool-test-query")
+
 (ert-deftest xquery-tool-test-set-attribute ()
   (let ((cases
 	 ;; char args result
@@ -429,19 +431,20 @@ when the buffer is narrowed."
 	(xquery-tool-result-root-element-name 'beep)
 	(xquery-tool-omit-xml-declaration t)
 	(cases `(("namespace-test.xml";; actually a libreoffice document
-		 (2209 . 2858);; range to work on
-		 "//text()";; query
-		 ;; result
+		  (2209 . 2858);; range to work on
+		  "//text()";; query
+		  ;; result
 		 ((,xquery-tool-result-root-element-name nil "
 sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
 ")))
-		 ("namespace-test.xml";; actually a libreoffice document
-		 nil;; range to work on
-		 "//office:meta//text()";; query
-		 ;; result; same as for narrowed above
-		 ((,xquery-tool-result-root-element-name nil "
-sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
-"))))))    
+;; 		 ("namespace-test.xml";; actually a libreoffice document
+;; 		 nil;; range to work on
+;; 		 "//office:meta//text()";; query
+;; 		 ;; result; same as for narrowed above
+;; 		 ((,xquery-tool-result-root-element-name nil "
+;; sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+;; ")))
+		 )))    
     (dolist (case cases)
       (xquery-tool-wipe-temp-files nil 'force)
       (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
@@ -452,6 +455,8 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
 	    ;;(pp (cons "result" (xml-parse-region (point-min) (point-max))))
 	    (xml-parse-region (point-min) (point-max)))
 	  (elt case 3)))))))
+
+;; (ert "xquery-tool-test-namespace-fun")
 
 
 
