@@ -31,6 +31,11 @@
 ;; xquery-tool), and then call `xquery-tool-query' from a buffer
 ;; visiting an xml document.
 
+;; TODOs:
+;; - add different backends (basex?)
+;; - find additional xquery/xpath test cases (maybe from https://dev.w3.org/2011/QT3-test-suite/)
+;; - search "TODO" in this file
+
 ;;; Code:
 
 (require 'xmltok)
@@ -45,6 +50,23 @@
   "Customization group for the xquery-tool."
   :group 'external
   :prefix 'xquery-tool-)
+
+;; (defvar xquery-tool-backends `((saxonb)
+;; 			       (basexclient))
+;;   "TODO: List of xquery engines to choose from.
+
+;; An association list with a cdr that can be applied to
+;; `call-process'.")
+
+
+;; (defcustom xquery-tool-backend 'saxonb
+;;   "TODO: Current xquery tool backend. 
+
+;; It must be defined in `xquery-tool-backends', and installed on
+;; your system."
+;;   :group 'xquery-tool
+;;   :type '(symbol)
+;;   :options xquery-tool-backends)
 
 (defcustom xquery-tool-java-binary "/usr/bin/java"
   "Command name to invoke the Java Binary on your system."
@@ -98,8 +120,7 @@ It will be created in `temporary-file-directory'."
 (defcustom xquery-tool-resolve-xincludes nil
   "Whether to resolve xinclude statements before running the query.
 
-Switches on Saxon's '-xi' option, and makes
-`xquery-tool-parse-to-shadow' parse included files."
+Makes `xquery-tool-parse-to-shadow' parse included files."
   :group 'xquery-tool
   :type '(boolean))
 
@@ -195,16 +216,18 @@ The function returns the buffer that the results are in."
       (if buffer-read-only (read-only-mode -1))
       (erase-buffer))
     (setq process-status
-	  (call-process xquery-tool-java-binary ;; program
-			nil ;; xml-shadow-file     ;; infile
-			target-buffer;; destination
-			nil;; update display
-			;; args
-			"-classpath" xquery-tool-saxonb-jar
-			"net.sf.saxon.Query"
-			;; "-s:-"
-			(format "-q:%s" xquery-file)
-			(if xquery-tool-resolve-xincludes "-xi:on" "-xi:off")))
+	  (apply 'call-process
+		 (list
+		  xquery-tool-java-binary ;; program
+		  nil ;; xml-shadow-file     ;; infile
+		  target-buffer;; destination
+		  nil;; update display
+		  ;; args
+		  "-classpath" xquery-tool-saxonb-jar
+		  "net.sf.saxon.Query"
+		  (format "-s:%s" xml-shadow-file)
+		  (format "-q:%s" xquery-file)
+		  (if xquery-tool-resolve-xincludes "-xi:on" "-xi:off"))))
     (if (= 0 process-status)
 	(message "Called saxonb, setting up results ...")
       (error "Something went wrong in call to saxonb, status %s" process-status))
@@ -364,12 +387,10 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
 			 (find-file-noselect xml-buffer-or-file 'nowarn 'raw))
 			(t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
-	(xquery (if (string-match "^/\\([^/]\\|$\\)" xquery) (substring xquery 1) xquery))
-	namespaces hashsum)
+	namespaces)
     (with-current-buffer tmp
       (erase-buffer))
     (with-current-buffer xml-buff
-      (setq hashsum (secure-hash 'md5 (current-buffer) (point-min) (point-max)))
       (save-excursion
 	(save-restriction
 	  ;; make sure to pick up namespaces on root element
@@ -386,13 +407,14 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 		  (insert (format "declare namespace %s=\"%s\";\n"
 				  naspa-name naspa-val)))))))))
     (with-current-buffer tmp
-      (insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n") 
+      (insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n")
       (when xquery-tool-omit-xml-declaration
 	;; fix for saxon (does not respect standard output option?)
 	(insert "declare namespace saxon=\"http://saxon.sf.net/\";\n") 
 	(insert "declare option saxon:output \"omit-xml-declaration=yes\";")
 	(insert "declare option output:omit-xml-declaration \"yes\";\n"))
-      (insert (format "root(doc(\"%s\"))" (xquery-tool-indexed-xml-file-name hashsum)))
+      ;; (insert "declare option output:indent \"yes\";\n")
+      ;; (insert "declare option output:item-separator \"&#xa;\";")
       (insert xquery)
       (save-buffer)
       (buffer-file-name (current-buffer)))))
@@ -411,7 +433,13 @@ Returns the filename to which the shadow tree was written."
 	   (original-file-name (if (buffer-file-name (current-buffer))
 				   (url-encode-url (format "file://%s" (buffer-file-name (current-buffer))))
 				 (format "buf:///%s" (url-encode-url (buffer-name)))))
-	   (tmp-file-name (xquery-tool-indexed-xml-file-name (secure-hash 'md5 (current-buffer) start end)))
+	   (tmp-file-name (xquery-tool-indexed-xml-file-name
+			   ;; use hash as git would (depending on newline conversion and other settings)
+			   (secure-hash 'sha1
+					(concat "blob "
+						(number-to-string (or (position-bytes (1- (point-max))) 0))
+						(char-to-string 0)
+						(buffer-substring-no-properties start end)))))
 	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	   ;; absolute start of buffer (-1)
 	   (buffer-offset (cond
@@ -510,6 +538,13 @@ Returns the filename to which the shadow tree was written."
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
       tmp-file-name)))
+
+
+(benchmark-run 100
+  )
+
+
+
 
 (defun xquery-tool-get-attributes (&optional x-atts ignore-namespaces)
   "Get attributes as an assoc list from X-ATTS (default `xmltok-attributes').

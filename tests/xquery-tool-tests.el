@@ -403,7 +403,7 @@ when the buffer is narrowed."
 		    "\n  "
 		    (disclaimer
 		     ((tmplink:start . ,(format "file://%sdisclaimer.xml#23" test-dir))
-		      (xml:base . ,(xquery-tool-indexed-xml-file-name "3f9b445a35f3999b98b2e5dc95b8003f")))
+		      (xml:base . ,(xquery-tool-indexed-xml-file-name "3abf43ca6771e650af2e5c455db7a14c478dd23a")))
 		     "\n      "
 		     (p
 		      ((tmplink:start . ,(format "file://%sdisclaimer.xml#38" test-dir)))
@@ -425,6 +425,8 @@ when the buffer is narrowed."
 	    (xml-parse-region (point-min) (point-max)))
 	  (car (last case))))))))
 
+;; (ert "xquery-tool-test-positions-xinclude")
+
 (ert-deftest xquery-tool-test-namespace-fun ()
   "Test things on a seriously namespaced document."
   (let* ((test-dir (xquery-tool-get-test-dir))
@@ -437,14 +439,13 @@ when the buffer is narrowed."
 		 ((,xquery-tool-result-root-element-name nil "
 sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
 ")))
-;; 		 ("namespace-test.xml";; actually a libreoffice document
-;; 		 nil;; range to work on
-;; 		 "//office:meta//text()";; query
-;; 		 ;; result; same as for narrowed above
-;; 		 ((,xquery-tool-result-root-element-name nil "
-;; sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
-;; ")))
-		 )))    
+		 ("namespace-test.xml";; actually a libreoffice document
+		 nil;; range to work on
+		 "//office:meta//text()";; query
+		 ;; result; same as for narrowed above
+		 ((,xquery-tool-result-root-element-name nil "
+sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+"))))))
     (dolist (case cases)
       (xquery-tool-wipe-temp-files nil 'force)
       (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
