@@ -411,7 +411,7 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
       (when xquery-tool-omit-xml-declaration
 	;; fix for saxon (does not respect standard output option?)
 	(insert "declare namespace saxon=\"http://saxon.sf.net/\";\n") 
-	(insert "declare option saxon:output \"omit-xml-declaration=yes\";")
+	(insert "declare option saxon:output \"omit-xml-declaration=yes\";\n")
 	(insert "declare option output:omit-xml-declaration \"yes\";\n"))
       ;; (insert "declare option output:indent \"yes\";\n")
       ;; (insert "declare option output:item-separator \"&#xa;\";")
@@ -534,17 +534,10 @@ Returns the filename to which the shadow tree was written."
 		(when outside-root
 		  (setq grow-factor (+ grow-factor (length new-namespace)))
 		  (setq outside-root nil)))))
-	  (write-file tmp-file-name nil)
+	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
       tmp-file-name)))
-
-
-(benchmark-run 100
-  )
-
-
-
 
 (defun xquery-tool-get-attributes (&optional x-atts ignore-namespaces)
   "Get attributes as an assoc list from X-ATTS (default `xmltok-attributes').
