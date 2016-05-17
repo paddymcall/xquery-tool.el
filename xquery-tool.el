@@ -487,7 +487,7 @@ Returns the filename to which the shadow tree was written."
 	      (insert new-namespace)
 	      (when (with-current-buffer src-buffer
 		      (or (buffer-narrowed-p) (use-region-p)))
-		(mapcar (lambda (nsp) (insert (format " %s:%s=\"%s\"" (caar nsp) (cdar nsp)
+		(mapc (lambda (nsp) (insert (format " %s:%s=\"%s\"" (caar nsp) (cdar nsp)
 						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
 			namespaces)))
 	    ;; `parse' document and add tracers to start-tags and empty elements
@@ -643,7 +643,10 @@ check whether this is really an xinclude element."
        filename
        (file-exists-p filename)
        (file-readable-p filename))
-      (with-current-buffer (find-file-noselect filename 'nowarn 'raw)
+      (message "Following xinclude to %s" filename)
+      (with-current-buffer (or (find-buffer-visiting filename)
+			       (let ((rng-nxml-auto-validate-flag nil))
+				 (find-file-noselect filename 'nowarn)))
 	(save-excursion
 	  (save-restriction
 	    (widen)
