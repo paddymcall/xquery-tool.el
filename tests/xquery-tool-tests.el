@@ -1,9 +1,11 @@
 ;;; some tests for xquery-tool
 
-;;; run from command line as `emacs --no-init-file --no-site-file -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
+;;; run from command line as `emacs --no-init-file --no-site-file -batch -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
 
 (require 'format-spec)
 (require 'xml)
+(require 'subr-x)
+(require 'ert)
 
 (defun xquery-tool-get-test-dir ()
   "Find directory containing tests."
@@ -459,7 +461,26 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
 
 ;; (ert "xquery-tool-test-namespace-fun")
 
+(ert-deftest xquery-tool-test-unicode-things ()
+  "Test if unicode things work (match on attribute, name of element, content)."
+  (let ((xquery-tool-result-root-element-name 'beep)
+	 (xquery-tool-omit-xml-declaration t)
+	 (xml-doc "<dīv xml:id=\"āṣūḥṇṭḹ\">mḹāṣṭḥḹअत्र</dīv>")
+	 (cases `(("count(//dīv)" . "1")
+		  ("count(//*[@xml:id=\"āṣūḥṇṭḹ\"])" . "1")
+		  ("count(//*[matches(@xml:id, \"^āṣū\")])" . "1")
+		  ("count(//*[matches(./text(), \"mḹāṣṭḥḹअ\")])" . "1"))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-temp-buffer
+	(insert xml-doc)
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query (car case) (current-buffer) nil nil nil)
+	    (buffer-substring-no-properties (point-min) (point-max)))
+	  (cdr case)))))))
 
+;; (ert 'xquery-tool-test-unicode-things)
 
 
 
