@@ -241,7 +241,8 @@ The function returns the buffer that the results are in."
 		  (if xquery-tool-resolve-xincludes "-xi:on" "-xi:off"))))
     (if (= 0 process-status)
 	(message "Called saxonb, setting up results ...")
-      (error "Something went wrong in call to saxonb, status %s" process-status))
+      (when show-results (pop-to-buffer target-buffer))
+      (error "Bad exit status: %s" process-status))
     (with-current-buffer target-buffer
       (goto-char (point-min))
       (xquery-tool-setup-xquery-results target-buffer save-namespace)
@@ -392,7 +393,7 @@ xmltok-start."
   "Construct an xquery file containing XQUERY.
 
 If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
-  (let ((tmp (find-file-noselect (xquery-tool-xq-file) 'nowarn 'raw))
+  (let ((tmp (progn (find-file-noselect (xquery-tool-xq-file) 'nowarn)))
 	(xml-buff (cond ((null xml-buffer-or-file) (current-buffer))
 			((bufferp xml-buffer-or-file) xml-buffer-or-file)
 			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
