@@ -200,7 +200,18 @@ The function returns the buffer that the results are in."
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
 	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
-     (let ((xquery (read-string "Your xquery: " nil 'xquery-tool-xquery-history))
+     (let ((xquery (read-string
+		    (save-match-data
+		      (format "Your xquery (%s): " (cond
+						    ((and (stringp (car xquery-tool-xquery-history))
+							  (string-match
+							   (rx-to-string '(1+ not-newline))
+							   (car xquery-tool-xquery-history)))
+						     (match-string 0 (car xquery-tool-xquery-history)))
+						    (t (car xquery-tool-xquery-history)))))
+		    nil
+		    'xquery-tool-xquery-history
+		    xquery-tool-xquery-history))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
        (list xquery (current-buffer) wrap save-namespace 'show-results))))
