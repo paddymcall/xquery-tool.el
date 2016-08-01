@@ -208,9 +208,21 @@ The function returns the buffer that the results are in."
 						  (eq major-mode 'xquery-mode)))
 				       x))
 				   (buffer-list)))))
+
+
 	    (xquery
 	     (read-string
-	      (format "Your xquery (default: %s): " (if xquery-buffer (buffer-name xquery-buffer) (car xquery-tool-xquery-history)))
+	      (save-match-data
+		(format "Your xquery (default: %s): "
+			(cond
+			 (xquery-buffer
+			  (buffer-name xquery-buffer))
+			 ((and (stringp (car xquery-tool-xquery-history))
+			       (string-match
+				(rx-to-string '(1+ not-newline))
+				(car xquery-tool-xquery-history)))
+			  (match-string 0 (car xquery-tool-xquery-history)))
+			 (t (car xquery-tool-xquery-history)))))
 	      nil
 	      'xquery-tool-xquery-history
 	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
