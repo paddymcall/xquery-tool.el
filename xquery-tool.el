@@ -200,16 +200,39 @@ The function returns the buffer that the results are in."
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
 	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
-     (let ((xquery (read-string (format "Your xquery (default: %s): " (car xquery-tool-xquery-history))
-				nil 'xquery-tool-xquery-history xquery-tool-xquery-history))
+     (let* ((xquery-buffer (car (delq nil
+				  (mapcar
+				   (lambda (x)
+				     (when (and (get-buffer-window x)
+						(with-current-buffer x
+						  (eq major-mode 'xquery-mode)))
+				       x))
+				   (buffer-list)))))
+	    (xquery
+	     (read-string
+	      (format "Your xquery (default: %s): " (if xquery-buffer (buffer-name xquery-buffer) (car xquery-tool-xquery-history)))
+	      nil
+	      'xquery-tool-xquery-history
+	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
        (list xquery (current-buffer) wrap save-namespace 'show-results))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
-	 (if (and (file-readable-p xquery) (file-regular-p xquery))
-	     xquery
-	   (xquery-tool-setup-xquery-file xquery (current-buffer))))
+	 (cond ((bufferp xquery)
+		;; clean up before rewriting
+		(when (get-file-buffer (xquery-tool-xq-file))
+		  (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
+		    (set-buffer-modified-p nil)
+		    (kill-buffer (current-buffer))))
+		(with-temp-file (xquery-tool-xq-file)
+		  (erase-buffer)
+		  (insert (with-current-buffer xquery
+			    (buffer-substring-no-properties (point-min) (point-max)))))
+		(xquery-tool-xq-file))
+	       ((and (file-readable-p xquery) (file-regular-p xquery))
+		xquery)
+	       (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
 			   (xquery-tool-parse-to-shadow)))
 	process-status)
