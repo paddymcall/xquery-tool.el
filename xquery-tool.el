@@ -470,7 +470,7 @@ Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
 to the position in the original source.
 Returns the filename to which the shadow tree was written."
-  (message "Starting shadow run at %s" (time-to-seconds (current-time)))
+  ;; (message "Starting shadow run at %s" (time-to-seconds (current-time)))
   (with-current-buffer (if (bufferp xmlbuffer) xmlbuffer (current-buffer))
     (let* ((start (if (use-region-p) (region-beginning) (point-min)))
 	   (end (if (use-region-p) (region-end) (point-max)))
@@ -538,7 +538,7 @@ Returns the filename to which the shadow tree was written."
 			namespaces)))
 	    ;; `parse' document and add tracers to start-tags and empty elements
 	    (goto-char (point-min));; but start from the top again
-	    (message "Start parsing at %s" (time-to-seconds (current-time)))
+	    ;; (message "Start parsing at %s" (time-to-seconds (current-time)))
 	    (while (xmltok-forward)
 	      (when (member xmltok-type '(start-tag empty-element))
 		;; consider xinclude option
@@ -583,12 +583,13 @@ Returns the filename to which the shadow tree was written."
 		(when outside-root
 		  (setq grow-factor (+ grow-factor (length new-namespace)))
 		  (setq outside-root nil))))
-	    (message "End parsing at %s" (time-to-seconds (current-time))))
+	    ;; (message "End parsing at %s" (time-to-seconds (current-time)))
+	    )
 	  (set-marker current-parse-position nil)
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
-      (message "Finished shadow run at %s" (time-to-seconds (current-time)))
+      ;;(message "Finished shadow run at %s" (time-to-seconds (current-time)))
       tmp-file-name)))
 
 ;; (benchmark-run 1
