@@ -1,9 +1,18 @@
 ;;; some tests for xquery-tool
 
-;;; run from command line as `emacs --no-init-file --no-site-file -batch -l ert -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
+;;; run from command line as `emacs --no-init-file --no-site-file -batch -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit'
 
 (require 'format-spec)
 (require 'xml)
+(require 'subr-x)
+(require 'ert)
+
+(defun xquery-tool-get-test-dir ()
+  "Find directory containing tests."
+  (file-name-as-directory
+   (concat
+    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+    "tests")))
 
 (ert-deftest xquery-tool-test-get-namespace-candidates ()
     (let ((cases '(("<TEI xml:id=\"pvv-SARIT\"  xmlns=\"http://www.tei-c.org/ns/1.0\">" . nil)
@@ -83,6 +92,8 @@ Does not check the links, though."
 	  (car (last case))))))
     (delete-file (buffer-file-name tmp))
     (kill-buffer tmp)))
+
+;; (ert "xquery-tool-test-query")
 
 (ert-deftest xquery-tool-test-set-attribute ()
   (let ((cases
@@ -379,10 +390,7 @@ when the buffer is narrowed."
 
 (ert-deftest xquery-tool-test-positions-xinclude ()
   "Test back links for xinclude files."
-  (let* ((test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+  (let* ((test-dir (xquery-tool-get-test-dir))
 	(xquery-tool-omit-xml-declaration 'yes)
 	(xquery-tool-resolve-xincludes 'yes)
 	(cases `(("xi-base.xml"
@@ -397,7 +405,7 @@ when the buffer is narrowed."
 		    "\n  "
 		    (disclaimer
 		     ((tmplink:start . ,(format "file://%sdisclaimer.xml#23" test-dir))
-		      (xml:base . ,(xquery-tool-indexed-xml-file-name "3f9b445a35f3999b98b2e5dc95b8003f")))
+		      (xml:base . ,(xquery-tool-indexed-xml-file-name "3abf43ca6771e650af2e5c455db7a14c478dd23a")))
 		     "\n      "
 		     (p
 		      ((tmplink:start . ,(format "file://%sdisclaimer.xml#38" test-dir)))
@@ -415,11 +423,91 @@ when the buffer is narrowed."
 	(should
 	 (equal
 	  (with-current-buffer (xquery-tool-query "/" (current-buffer) nil 'save nil)
-	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    ;;(pp (cons "result" (xml-parse-region (point-min) (point-max))))
 	    (xml-parse-region (point-min) (point-max)))
 	  (car (last case))))))))
 
+;; (ert "xquery-tool-test-positions-xinclude")
 
+(ert-deftest xquery-tool-test-namespace-fun ()
+  "Test things on a seriously namespaced document."
+  (let* ((test-dir (xquery-tool-get-test-dir))
+	(xquery-tool-result-root-element-name 'beep)
+	(xquery-tool-omit-xml-declaration t)
+	(cases `(("namespace-test.xml";; actually a libreoffice document
+		  (2209 . 2858);; range to work on
+		  "//text()";; query
+		  ;; result
+		 ((,xquery-tool-result-root-element-name nil "
+sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+")))
+		 ("namespace-test.xml";; actually a libreoffice document
+		 nil;; range to work on
+		 "//office:meta//text()";; query
+		 ;; result; same as for narrowed above
+		 ((,xquery-tool-result-root-element-name nil "
+sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16S1LibreOffice/5.0.4.2$Linux_X86_64 LibreOffice_project/00m0$Build-2
+"))))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(when (consp (elt case 1))
+	  (widen)
+	  (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
+	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    (xml-parse-region (point-min) (point-max)))
+	  (elt case 3)))))))
+
+;; (ert "xquery-tool-test-namespace-fun")
+
+(ert-deftest xquery-tool-namespace-test-2 ()
+  "Try not to croak when saxon namespace is already there."  
+  (let* ((test-dir (xquery-tool-get-test-dir))
+	(xquery-tool-result-root-element-name 'beep)
+	(xquery-tool-omit-xml-declaration t)
+	(cases `(("namespace-test2.xml";; actually a libreoffice document
+		  nil ;; range to work on
+		  "//body/p/text()";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\nempty\n"))))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	(when (consp (elt case 1))
+	  (widen)
+	  (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
+	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    (xml-parse-region (point-min) (point-max)))
+	  (elt case 3)))))))
+
+;; (ert "xquery-tool-namespace-test-2")
+
+(ert-deftest xquery-tool-test-unicode-things ()
+  "Test if unicode things work (match on attribute, name of element, content)."
+  (let ((xquery-tool-result-root-element-name 'beep)
+	 (xquery-tool-omit-xml-declaration t)
+	 (xml-doc "<dīv xml:id=\"āṣūḥṇṭḹ\">mḹāṣṭḥḹअत्र</dīv>")
+	 (cases `(("count(//dīv)" . "1")
+		  ("count(//*[@xml:id=\"āṣūḥṇṭḹ\"])" . "1")
+		  ("count(//*[matches(@xml:id, \"^āṣū\")])" . "1")
+		  ("count(//*[matches(./text(), \"mḹāṣṭḥḹअ\")])" . "1"))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (with-temp-buffer
+	(insert xml-doc)
+	(should
+	 (equal
+	  (with-current-buffer (xquery-tool-query (car case) (current-buffer) nil nil nil)
+	    (buffer-substring-no-properties (point-min) (point-max)))
+	  (cdr case)))))))
+
+;; (ert 'xquery-tool-test-unicode-things)
 
 
 
