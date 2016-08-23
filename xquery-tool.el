@@ -200,26 +200,51 @@ The function returns the buffer that the results are in."
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
 	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
-     (let ((xquery (read-string
-		    (save-match-data
-		      (format "Your xquery (%s): " (cond
-						    ((and (stringp (car xquery-tool-xquery-history))
-							  (string-match
-							   (rx-to-string '(1+ not-newline))
-							   (car xquery-tool-xquery-history)))
-						     (match-string 0 (car xquery-tool-xquery-history)))
-						    (t (car xquery-tool-xquery-history)))))
-		    nil
-		    'xquery-tool-xquery-history
-		    xquery-tool-xquery-history))
+     (let* ((xquery-buffer (car (delq nil
+				  (mapcar
+				   (lambda (x)
+				     (when (and (get-buffer-window x)
+						(with-current-buffer x
+						  (eq major-mode 'xquery-mode)))
+				       x))
+				   (buffer-list)))))
+
+
+	    (xquery
+	     (read-string
+	      (save-match-data
+		(format "Your xquery (default: %s): "
+			(cond
+			 (xquery-buffer
+			  (buffer-name xquery-buffer))
+			 ((and (stringp (car xquery-tool-xquery-history))
+			       (string-match
+				(rx-to-string '(1+ not-newline))
+				(car xquery-tool-xquery-history)))
+			  (match-string 0 (car xquery-tool-xquery-history)))
+			 (t (car xquery-tool-xquery-history)))))
+	      nil
+	      'xquery-tool-xquery-history
+	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
        (list xquery (current-buffer) wrap save-namespace 'show-results))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
-	 (if (and (file-readable-p xquery) (file-regular-p xquery))
-	     xquery
-	   (xquery-tool-setup-xquery-file xquery (current-buffer))))
+	 (cond ((bufferp xquery)
+		;; clean up before rewriting
+		(when (get-file-buffer (xquery-tool-xq-file))
+		  (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
+		    (set-buffer-modified-p nil)
+		    (kill-buffer (current-buffer))))
+		(with-temp-file (xquery-tool-xq-file)
+		  (erase-buffer)
+		  (insert (with-current-buffer xquery
+			    (buffer-substring-no-properties (point-min) (point-max)))))
+		(xquery-tool-xq-file))
+	       ((and (file-readable-p xquery) (file-regular-p xquery))
+		xquery)
+	       (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
 			   (xquery-tool-parse-to-shadow)))
 	process-status)
@@ -238,6 +263,8 @@ The function returns the buffer that the results are in."
 		  "net.sf.saxon.Query"
 		  (format "-s:%s" xml-shadow-file)
 		  (format "-q:%s" xquery-file)
+		  ;; (format "-qversion:%s" "3.0")
+		  (format "-ext:on")
 		  (if xquery-tool-resolve-xincludes "-xi:on" "-xi:off"))))
     (if (= 0 process-status)
 	(message "Called saxonb, setting up results ...")
@@ -443,6 +470,7 @@ Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
 to the position in the original source.
 Returns the filename to which the shadow tree was written."
+  (message "Starting shadow run at %s" (time-to-seconds (current-time)))
   (with-current-buffer (if (bufferp xmlbuffer) xmlbuffer (current-buffer))
     (let* ((start (if (use-region-p) (region-beginning) (point-min)))
 	   (end (if (use-region-p) (region-end) (point-max)))
@@ -466,6 +494,7 @@ Returns the filename to which the shadow tree was written."
 	   ;; how much the buffer grows from insertions
 	   (grow-factor 0)
 	   (outside-root t)
+	   (current-parse-position (make-marker))
 	   namespaces xi-replacement)
       (unless (file-exists-p tmp-file-name)
 	;; get namespaces from root, if necessary
@@ -491,7 +520,7 @@ Returns the filename to which the shadow tree was written."
 	  (when (member xmltok-type '(start-tag empty-element))
 	    ;; save namespaces defined on root element
 	    (when (< 0 (length xmltok-namespace-attributes))
-	      (mapcar (lambda (x)
+	      (mapc (lambda (x)
 			(setq namespaces
 			      (add-to-list 'namespaces
 					   (cons
@@ -509,14 +538,16 @@ Returns the filename to which the shadow tree was written."
 			namespaces)))
 	    ;; `parse' document and add tracers to start-tags and empty elements
 	    (goto-char (point-min));; but start from the top again
+	    (message "Start parsing at %s" (time-to-seconds (current-time)))
 	    (while (xmltok-forward)
 	      (when (member xmltok-type '(start-tag empty-element))
 		;; consider xinclude option
 		(when (and
-		       (string= "include" (xmltok-start-tag-local-name))
 		       xquery-tool-resolve-xincludes
+		       (string= "include" (xmltok-start-tag-local-name))
 		       (rassoc "http://www.w3.org/2001/XInclude" namespaces)
 		       (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		  (message "Processing an xinclude")
 		  (goto-char xmltok-start)
 		  (xmltok-save
 		    (xmltok-forward)
@@ -533,28 +564,37 @@ Returns the filename to which the shadow tree was written."
 								(cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
 				     (point-max))))))
 		    (warn "Failed to relink xinclude: %s" xi-replacement)))
-		(save-excursion
-		  (goto-char xmltok-name-end)
-		  (setq grow-factor;; adjust grow-factor for length of insertion
-			(+ grow-factor
-			   (abs
-			    (-
-			     (point-max)
-			     (progn
-			       (insert (xquery-tool-make-namespace-start-string
-					original-file-name
-					(+ (- xmltok-start grow-factor) buffer-offset)
-					xquery-tool-link-namespace))
-			       (point-max)))))))
+		(set-marker current-parse-position (point))
+		(goto-char xmltok-name-end)
+		(setq grow-factor;; adjust grow-factor for length of insertion
+		      (+ grow-factor
+			 (abs
+			  (-
+			   (point-max)
+			   (progn
+			     (insert (xquery-tool-make-namespace-start-string
+				      original-file-name
+				      (+ (- xmltok-start grow-factor) buffer-offset)
+				      xquery-tool-link-namespace))
+			     (point-max))))))
+		(goto-char current-parse-position)
 		;; after the first start-tag, we need to take account of
 		;; the namespace that was added
 		(when outside-root
 		  (setq grow-factor (+ grow-factor (length new-namespace)))
-		  (setq outside-root nil)))))
+		  (setq outside-root nil))))
+	    (message "End parsing at %s" (time-to-seconds (current-time))))
+	  (set-marker current-parse-position nil)
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
+      (message "Finished shadow run at %s" (time-to-seconds (current-time)))
       tmp-file-name)))
+
+;; (benchmark-run 1
+;;   (with-temp-buffer
+;;     (insert-file-contents-literally "/tmp/corpXTZgQxh")
+;;     (xquery-tool-parse-to-shadow (current-buffer))))
 
 (defun xquery-tool-get-attributes (&optional x-atts ignore-namespaces)
   "Get attributes as an assoc list from X-ATTS (default `xmltok-attributes').
