@@ -408,21 +408,26 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 	  ;; make sure to pick up namespaces on root element
 	  (widen)
 	  (goto-char (point-min))
-	  (while (and (xmltok-forward) (not (eq xmltok-type 'start-tag))) t)
+	  (while (and (xmltok-forward)
+		      (not (member xmltok-type '(start-tag empty-element)))) t)
 	  (dolist (naspa-att xmltok-namespace-attributes)
 	    (let ((naspa-val (xmltok-attribute-value naspa-att))
 		  (naspa-name (xmltok-attribute-local-name naspa-att)))
-	      (with-current-buffer tmp
+	      (if (member naspa-name (mapcar 'car namespaces))
+		  (warn "Namespace already defined for %s, skipping" naspa-name)
+		(with-current-buffer tmp
 		(if (string= naspa-name "xmlns")
 		    (insert (format "declare default element namespace \"%s\";\n"
 				    naspa-val))
 		  (insert (format "declare namespace %s=\"%s\";\n"
-				  naspa-name naspa-val)))))))))
+				  naspa-name naspa-val)))))
+	      (push (cons naspa-name naspa-val) namespaces))))))
     (with-current-buffer tmp
       (insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n")
       (when xquery-tool-omit-xml-declaration
 	;; fix for saxon (does not respect standard output option?)
-	(insert "declare namespace saxon=\"http://saxon.sf.net/\";\n") 
+	(unless (assoc "saxon" namespaces)
+	  (insert "declare namespace saxon=\"http://saxon.sf.net/\";\n")) 
 	(insert "declare option saxon:output \"omit-xml-declaration=yes\";\n")
 	(insert "declare option output:omit-xml-declaration \"yes\";\n"))
       ;; (insert "declare option output:indent \"yes\";\n")
