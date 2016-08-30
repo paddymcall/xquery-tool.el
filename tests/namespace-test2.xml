@@ -30,6 +30,9 @@
 	</availability>
 	<date>2016</date>
       </publicationStmt>
+      <sourceDesc>
+	<p/>
+      </sourceDesc>
     </fileDesc>
     <encodingDesc>
       <editorialDecl>
@@ -40,7 +43,9 @@
       <change when="2016-08-23" who="pma"></change>
     </revisionDesc>
   </teiHeader>
-  <body>
+  <text>
+    <body>
     <p>empty</p>
-  </body>  
+  </body>
+  </text>
 </TEI>

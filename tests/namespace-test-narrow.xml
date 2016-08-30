@@ -1,0 +1,7 @@
+<div xmlns="http://hokuspokus">
+  <lg>
+    <l>hello</l>
+    <testy:l xmlns:testy="http://somewhere">maybe</testy:l>
+    <l>bye bye</l>
+  </lg>
+</div>
