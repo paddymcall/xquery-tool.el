@@ -472,21 +472,34 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
 		  nil ;; range to work on
 		  "//body/p/text()";; query
 		  ;; result
-		  ((,xquery-tool-result-root-element-name nil "\nempty\n"))))))
+		  ((,xquery-tool-result-root-element-name nil "\nempty\n")))
+		 ("namespace-test-narrow.xml"
+		  nil ;; range to work on
+		  "count(//l)";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\n2\n")))
+		 ("namespace-test-narrow.xml"
+		  (35 . 143)	       ;; range to work on
+		  "count(//l)";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\n2\n"))))))
     (dolist (case cases)
       (xquery-tool-wipe-temp-files nil 'force)
-      (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
-	(when (consp (elt case 1))
+      (save-restriction
+	(with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
 	  (widen)
-	  (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
-	(should
-	 (equal
-	  (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
-	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
-	    (xml-parse-region (point-min) (point-max)))
-	  (elt case 3)))))))
+	  (when (consp (elt case 1))
+	    (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	  (should
+	   (equal
+	    (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
+	      (message (pp (cons "result" (xml-parse-region (point-min) (point-max)))))
+	      (xml-parse-region (point-min) (point-max)))
+	    (elt case 3))))))))
 
 ;; (ert "xquery-tool-namespace-test-2")
+
+
 
 (ert-deftest xquery-tool-test-unicode-things ()
   "Test if unicode things work (match on attribute, name of element, content)."
