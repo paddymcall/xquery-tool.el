@@ -535,8 +535,10 @@ Returns the filename to which the shadow tree was written."
 	      (insert new-namespace)
 	      (when (with-current-buffer src-buffer
 		      (or (buffer-narrowed-p) (use-region-p)))
-		(mapc (lambda (nsp) (insert (format " %s:%s=\"%s\"" (caar nsp) (cdar nsp)
-						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
+		(mapc (lambda (nsp) (insert (format " %s%s=\"%s\""
+						    (if (caar nsp) (format "%s:" (caar nsp)) "")
+						    (cdar nsp)
+						    (url-recreate-url (url-generic-parse-url (cdr nsp))))))
 			namespaces)))
 	    ;; `parse' document and add tracers to start-tags and empty elements
 	    (goto-char (point-min));; but start from the top again
