@@ -290,6 +290,8 @@ The function returns the buffer that the results are in."
       (read-only-mode)
       (goto-char (point-min)))
     (when show-results
+      (with-current-buffer target-buffer
+	(normal-mode))
       (display-buffer target-buffer
 		      `((display-buffer-reuse-window
 			 display-buffer-in-previous-window
