@@ -155,7 +155,7 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results)
+(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results index-xml)
   "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
@@ -171,7 +171,9 @@ them back to the source.  This is quite brittle.  If it is
 possible to create links, they are to the position (as returned
 by `point') in the source file or buffer.  This means that if
 something before that point is changed, all links to points after
-that position will stop working.
+that position will stop working.  To disable this, and save on
+processing time, call the function with a double prefix arg (`C-u
+C-u M-x xquery-tool-query')
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
@@ -183,9 +185,9 @@ element, possibly generating a well-formed XML document for a
 node set.  Configure `xquery-tool-result-root-element-name' to
 choose the element name.
 
-If SAVE-NAMESPACE is not nil (or you use a double prefix arg in the
-interactive call), then the attributes added to enable tracking
-of elements in the source document are not deleted.
+If SAVE-NAMESPACE is not nil (or you use a triple prefix arg in
+the interactive call), then the attributes added to enable
+tracking of elements in the source document are not deleted.
 
 SHOW-RESULTS, true by default in interactive usage, nil
 otherwise, pops up a buffer showing the results.
@@ -197,21 +199,21 @@ The function returns the buffer that the results are in."
        (unless (file-readable-p (symbol-value i))
 	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
      (let* ((xml-buffer (car (delq nil
-				  (mapcar
-				   (lambda (x)
-				     (when (and (get-buffer-window x)
-						(with-current-buffer x
-						  (eq major-mode 'nxml-mode)))
-				       x))
-				   (buffer-list)))))
+				   (mapcar
+				    (lambda (x)
+				      (when (and (get-buffer-window x)
+						 (with-current-buffer x
+						   (eq major-mode 'nxml-mode)))
+					x))
+				    (buffer-list)))))
 	    (xquery-buffer (car (delq nil
-				  (mapcar
-				   (lambda (x)
-				     (when (and (get-buffer-window x)
-						(with-current-buffer x
-						  (eq major-mode 'xquery-mode)))
-				       x))
-				   (buffer-list)))))
+				      (mapcar
+				       (lambda (x)
+					 (when (and (get-buffer-window x)
+						    (with-current-buffer x
+						      (eq major-mode 'xquery-mode)))
+					   x))
+				       (buffer-list)))))
 
 
 	    (xquery
@@ -230,14 +232,16 @@ The function returns the buffer that the results are in."
 	      nil
 	      'xquery-tool-xquery-history
 	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
-	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
-	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
+	    (wrap (<= 4 (or (car current-prefix-arg) 0)))
+	    (index-xml (not (<= 16 (or (car current-prefix-arg) 0))))
+	    (save-namespace (<= 64 (or (car current-prefix-arg) 0))))
        (list xquery
 	     (or xml-buffer
 		 (read-buffer "XML buffer: " nil))
 	     wrap
 	     save-namespace
-	     'show-results))))
+	     'show-results
+	     index-xml))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (cond ((bufferp xquery)
@@ -255,7 +259,7 @@ The function returns the buffer that the results are in."
 		xquery)
 	       (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
 	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
-			   (xquery-tool-parse-to-shadow)))
+			   (xquery-tool-parse-to-shadow (current-buffer) index-xml)))
 	process-status)
     (with-current-buffer target-buffer
       (if buffer-read-only (read-only-mode -1))
@@ -264,9 +268,9 @@ The function returns the buffer that the results are in."
 	  (apply 'call-process
 		 (list
 		  xquery-tool-java-binary ;; program
-		  nil ;; xml-shadow-file     ;; infile
-		  target-buffer;; destination
-		  nil;; update display
+		  nil		;; xml-shadow-file     ;; infile
+		  target-buffer	;; destination
+		  nil		;; update display
 		  ;; args
 		  "-classpath" xquery-tool-saxonb-jar
 		  "net.sf.saxon.Query"
@@ -290,7 +294,7 @@ The function returns the buffer that the results are in."
 	    (goto-char (point-min))
 	    (insert (format "<%s>\n" xquery-tool-result-root-element-name)))
 	  (goto-char (point-max))
-	    (insert (format "\n</%s>\n" xquery-tool-result-root-element-name))))
+	  (insert (format "\n</%s>\n" xquery-tool-result-root-element-name))))
       ;; if wrapped, try nxml
       (if (and wrap-in-root (functionp 'nxml-mode))
 	  (nxml-mode)
@@ -474,13 +478,16 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
       (save-buffer)
       (buffer-file-name (current-buffer)))))
 
-(defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
+(defun xquery-tool-parse-to-shadow (&optional xmlbuffer not-really?)
   "Make XMLBUFFER (default `current-buffer') traceable.
 
 Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
 to the position in the original source.
-Returns the filename to which the shadow tree was written."
+Returns the filename to which the shadow tree was written.
+
+If not-really? is not nil, don't really create an index, but just
+write and return a temporary file."
   ;; (message "Starting shadow run at %s" (time-to-seconds (current-time)))
   (with-current-buffer (if (bufferp xmlbuffer) xmlbuffer (current-buffer))
     (let* ((start (if (use-region-p) (region-beginning) (point-min)))
@@ -499,9 +506,9 @@ Returns the filename to which the shadow tree was written."
 	   (new-namespace (format " xmlns:%s=\"potemkin\"" xquery-tool-link-namespace))
 	   ;; absolute start of buffer (-1)
 	   (buffer-offset (cond
-		    ((use-region-p) (1- (region-beginning)))
-		    ((buffer-narrowed-p) (1- (point)))
-		    (t 0)))
+			   ((use-region-p) (1- (region-beginning)))
+			   ((buffer-narrowed-p) (1- (point)))
+			   (t 0)))
 	   ;; how much the buffer grows from insertions
 	   (grow-factor 0)
 	   (outside-root t)
@@ -526,79 +533,80 @@ Returns the filename to which the shadow tree was written."
 	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
-	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
-	  ;; if this was an xml document, set stuff up
-	  (when (member xmltok-type '(start-tag empty-element))
-	    ;; save namespaces defined on root element
-	    (when (< 0 (length xmltok-namespace-attributes))
-	      (mapc (lambda (x)
+	  (unless not-really?
+	    (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
+	    ;; if this was an xml document, set stuff up
+	    (when (member xmltok-type '(start-tag empty-element))
+	      ;; save namespaces defined on root element
+	      (when (< 0 (length xmltok-namespace-attributes))
+		(mapc (lambda (x)
 			(setq namespaces
 			      (add-to-list 'namespaces
 					   (cons
 					    (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
 					    (xmltok-attribute-value x)))))
 		      xmltok-namespace-attributes))
-	    ;; add the new namespace we need for tracing
-	    (save-excursion
-	      (goto-char xmltok-name-end)
-	      (insert new-namespace)
-	      (when (with-current-buffer src-buffer
-		      (or (buffer-narrowed-p) (use-region-p)))
-		(mapc (lambda (nsp) (insert (format " %s%s=\"%s\""
-						    (if (caar nsp) (format "%s:" (caar nsp)) "")
-						    (cdar nsp)
-						    (url-recreate-url (url-generic-parse-url (cdr nsp))))))
-			namespaces)))
-	    ;; `parse' document and add tracers to start-tags and empty elements
-	    (goto-char (point-min));; but start from the top again
-	    ;; (message "Start parsing at %s" (time-to-seconds (current-time)))
-	    (while (xmltok-forward)
-	      (when (member xmltok-type '(start-tag empty-element))
-		;; consider xinclude option
-		(when (and
-		       xquery-tool-resolve-xincludes
-		       (string= "include" (xmltok-start-tag-local-name))
-		       (rassoc "http://www.w3.org/2001/XInclude" namespaces)
-		       (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
-		  (message "Processing an xinclude")
-		  (goto-char xmltok-start)
-		  (xmltok-save
-		    (xmltok-forward)
-		    (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
-		  (if (and xi-replacement (file-name-absolute-p xi-replacement))
-		      (setq grow-factor
-			    (+ grow-factor
-			       (abs
-				(- (point-max)
-				   (progn
-				     (xquery-tool-set-attribute xmltok-start
-								"href"
-								xi-replacement
-								(cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
-				     (point-max))))))
-		    (warn "Failed to relink xinclude: %s" xi-replacement)))
-		(set-marker current-parse-position (point))
+	      ;; add the new namespace we need for tracing
+	      (save-excursion
 		(goto-char xmltok-name-end)
-		(setq grow-factor;; adjust grow-factor for length of insertion
-		      (+ grow-factor
-			 (abs
-			  (-
-			   (point-max)
-			   (progn
-			     (insert (xquery-tool-make-namespace-start-string
-				      original-file-name
-				      (+ (- xmltok-start grow-factor) buffer-offset)
-				      xquery-tool-link-namespace))
-			     (point-max))))))
-		(goto-char current-parse-position)
-		;; after the first start-tag, we need to take account of
-		;; the namespace that was added
-		(when outside-root
-		  (setq grow-factor (+ grow-factor (length new-namespace)))
-		  (setq outside-root nil))))
-	    ;; (message "End parsing at %s" (time-to-seconds (current-time)))
-	    )
-	  (set-marker current-parse-position nil)
+		(insert new-namespace)
+		(when (with-current-buffer src-buffer
+			(or (buffer-narrowed-p) (use-region-p)))
+		  (mapc (lambda (nsp) (insert (format " %s%s=\"%s\""
+						      (if (caar nsp) (format "%s:" (caar nsp)) "")
+						      (cdar nsp)
+						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
+			namespaces)))
+	      ;; `parse' document and add tracers to start-tags and empty elements
+	      (goto-char (point-min)) ;; but start from the top again
+	      ;; (message "Start parsing at %s" (time-to-seconds (current-time)))
+	      (while (xmltok-forward)
+		(when (member xmltok-type '(start-tag empty-element))
+		  ;; consider xinclude option
+		  (when (and
+			 xquery-tool-resolve-xincludes
+			 (string= "include" (xmltok-start-tag-local-name))
+			 (rassoc "http://www.w3.org/2001/XInclude" namespaces)
+			 (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		    (message "Processing an xinclude")
+		    (goto-char xmltok-start)
+		    (xmltok-save
+		      (xmltok-forward)
+		      (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
+		    (if (and xi-replacement (file-name-absolute-p xi-replacement))
+			(setq grow-factor
+			      (+ grow-factor
+				 (abs
+				  (- (point-max)
+				     (progn
+				       (xquery-tool-set-attribute xmltok-start
+								  "href"
+								  xi-replacement
+								  (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces)))
+				       (point-max))))))
+		      (warn "Failed to relink xinclude: %s" xi-replacement)))
+		  (set-marker current-parse-position (point))
+		  (goto-char xmltok-name-end)
+		  (setq grow-factor ;; adjust grow-factor for length of insertion
+			(+ grow-factor
+			   (abs
+			    (-
+			     (point-max)
+			     (progn
+			       (insert (xquery-tool-make-namespace-start-string
+					original-file-name
+					(+ (- xmltok-start grow-factor) buffer-offset)
+					xquery-tool-link-namespace))
+			       (point-max))))))
+		  (goto-char current-parse-position)
+		  ;; after the first start-tag, we need to take account of
+		  ;; the namespace that was added
+		  (when outside-root
+		    (setq grow-factor (+ grow-factor (length new-namespace)))
+		    (setq outside-root nil))))
+	      ;; (message "End parsing at %s" (time-to-seconds (current-time)))
+	      )
+	    (set-marker current-parse-position nil))
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
