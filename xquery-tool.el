@@ -155,7 +155,7 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results index-xml)
+(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results no-index-xml)
   "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
@@ -173,7 +173,7 @@ by `point') in the source file or buffer.  This means that if
 something before that point is changed, all links to points after
 that position will stop working.  To disable this, and save on
 processing time, call the function with a double prefix arg (`C-u
-C-u M-x xquery-tool-query')
+C-u M-x xquery-tool-query').
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
@@ -233,7 +233,7 @@ The function returns the buffer that the results are in."
 	      'xquery-tool-xquery-history
 	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
 	    (wrap (<= 4 (or (car current-prefix-arg) 0)))
-	    (index-xml (not (<= 16 (or (car current-prefix-arg) 0))))
+	    (no-index-xml (<= 16 (or (car current-prefix-arg) 0)))
 	    (save-namespace (<= 64 (or (car current-prefix-arg) 0))))
        (list xquery
 	     (or xml-buffer
@@ -241,7 +241,7 @@ The function returns the buffer that the results are in."
 	     wrap
 	     save-namespace
 	     'show-results
-	     index-xml))))
+	     no-index-xml))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (cond ((bufferp xquery)
@@ -258,8 +258,12 @@ The function returns the buffer that the results are in."
 	       ((and (file-readable-p xquery) (file-regular-p xquery))
 		xquery)
 	       (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
-	(xml-shadow-file (with-current-buffer (or xml-buff (current-buffer))
-			   (xquery-tool-parse-to-shadow (current-buffer) index-xml)))
+	(xml-shadow-file (if no-index-xml
+			     (with-current-buffer xml-buff
+			       (expand-file-name
+				(buffer-file-name (current-buffer))))
+			   (with-current-buffer xml-buff
+			     (xquery-tool-parse-to-shadow (current-buffer)))))
 	process-status)
     (with-current-buffer target-buffer
       (if buffer-read-only (read-only-mode -1))
@@ -285,7 +289,8 @@ The function returns the buffer that the results are in."
       (error "Bad exit status: %s" process-status))
     (with-current-buffer target-buffer
       (goto-char (point-min))
-      (xquery-tool-setup-xquery-results target-buffer save-namespace)
+      (unless no-index-xml
+	(xquery-tool-setup-xquery-results target-buffer save-namespace))
       (when wrap-in-root
 	(save-excursion
 	  (goto-char (point-min))
@@ -478,16 +483,13 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
       (save-buffer)
       (buffer-file-name (current-buffer)))))
 
-(defun xquery-tool-parse-to-shadow (&optional xmlbuffer not-really?)
+(defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
   "Make XMLBUFFER (default `current-buffer') traceable.
 
 Currently, for each start-tag or empty element in XMLBUFFER, this
 adds an @`xquery-tool-link-namespace':start attribute referring
 to the position in the original source.
-Returns the filename to which the shadow tree was written.
-
-If not-really? is not nil, don't really create an index, but just
-write and return a temporary file."
+Returns the filename to which the shadow tree was written."
   ;; (message "Starting shadow run at %s" (time-to-seconds (current-time)))
   (with-current-buffer (if (bufferp xmlbuffer) xmlbuffer (current-buffer))
     (let* ((start (if (use-region-p) (region-beginning) (point-min)))
@@ -533,8 +535,7 @@ write and return a temporary file."
 	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
-	  (unless not-really?
-	    (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
+	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
 	    ;; if this was an xml document, set stuff up
 	    (when (member xmltok-type '(start-tag empty-element))
 	      ;; save namespaces defined on root element
@@ -606,7 +607,7 @@ write and return a temporary file."
 		    (setq outside-root nil))))
 	      ;; (message "End parsing at %s" (time-to-seconds (current-time)))
 	      )
-	    (set-marker current-parse-position nil))
+	    (set-marker current-parse-position nil)
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
