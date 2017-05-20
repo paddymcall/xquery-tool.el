@@ -193,14 +193,18 @@ otherwise, pops up a buffer showing the results.
 The function returns the buffer that the results are in."
   (interactive
    (progn
-     (unless (eq major-mode 'nxml-mode)
-       (if (yes-or-no-p "Are you sure this is an XML buffer? ")
-	   t
-	 (error "Please call `xquery-tool-query' from a buffer visiting an XML document")))
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
 	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
-     (let* ((xquery-buffer (car (delq nil
+     (let* ((xml-buffer (car (delq nil
+				  (mapcar
+				   (lambda (x)
+				     (when (and (get-buffer-window x)
+						(with-current-buffer x
+						  (eq major-mode 'nxml-mode)))
+				       x))
+				   (buffer-list)))))
+	    (xquery-buffer (car (delq nil
 				  (mapcar
 				   (lambda (x)
 				     (when (and (get-buffer-window x)
@@ -228,7 +232,12 @@ The function returns the buffer that the results are in."
 	      (if xquery-buffer xquery-buffer (car xquery-tool-xquery-history))))
 	   (wrap (<= 4 (or (car current-prefix-arg) 0)))
 	   (save-namespace (<= 16 (or (car current-prefix-arg) 0))))
-       (list xquery (current-buffer) wrap save-namespace 'show-results))))
+       (list xquery
+	     (or xml-buffer
+		 (read-buffer "XML buffer: " nil))
+	     wrap
+	     save-namespace
+	     'show-results))))
   (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (cond ((bufferp xquery)
