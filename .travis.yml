@@ -4,7 +4,7 @@ sudo: required
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -qq emacs24 emacs24-el libsaxonb-java
+  - sudo apt-get install -qq emacs24 emacs24-el libsaxonb-java openjdk-7-jre
 
 script:
   - emacs --no-init-file --no-site-file -batch -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit
