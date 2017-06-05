@@ -6,12 +6,13 @@
 (require 'xml)
 (require 'subr-x)
 (require 'ert)
+(require 'xquery-tool)
 
 (defun xquery-tool-get-test-dir ()
   "Find directory containing tests."
   (file-name-as-directory
    (concat
-    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+    (file-name-directory (or (find-lisp-object-file-name 'xquery-tool-query nil) "./"))
     "tests")))
 
 (ert-deftest xquery-tool-test-get-namespace-candidates ()
@@ -149,58 +150,69 @@ Does not check the links, though."
 TODO: fix paths so that test passes on different machines."
   (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
   (let* ((xquery-tool-result-root-element-name "xq-tool-results")
-	(xquery-tool-omit-xml-declaration nil)
-	(xquery-tool-resolve-xincludes t)
-	(test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
-	(cases ;; filename args-for-query result
-	 `(("xi-base.xml" ("/") ((document
-				      ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-				      "\n  "
-				      (p nil "120 Mz is adequate for an average home user.")
-				      "\n  "
-				      (disclaimer
-				       ((xml:base . ,(format "file://%sdisclaimer.xml" test-dir)))
-				       "\n      "
-				       (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
-				       "\n   ")
-				      "\n  "
-				      (p nil "Just checking!")
-				      "\n")))
-	   ("xi-base.xml" ("//p" nil 'wrap) ((xq-tool-results nil "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "120 Mz is adequate for an average home user.")
-							      "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
-							      "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "Just checking!")
-							      "\n"))))))
+	 (xquery-tool-omit-xml-declaration nil)
+	 (xquery-tool-resolve-xincludes t)
+	 (test-dir (xquery-tool-get-test-dir))
+	 (cases ;; filename args-for-query result
+	  `(("xi-base.xml" ("/") ((document
+				   ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+				   "\n  "
+				   (p nil "120 Mz is adequate for an average home user.")
+				   "\n  "
+				   (disclaimer
+				    ((xml:base . ,(format "file://%sdisclaimer.xml" test-dir)))
+				    "\n      "
+				    (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+				    "\n   ")
+				   "\n  "
+				   (p nil "Just checking!")
+				   "\n")))
+	    ("xi-base.xml" ("//p" 'wrap) ((xq-tool-results nil "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"120 Mz is adequate for an average home user.")
+							       "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+							       "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"Just checking!")
+							       "\n"))))))
     (dolist (case cases)
-      (with-current-buffer (find-file-noselect
-			    (expand-file-name (car case)
-					      (file-name-directory (symbol-file 'xquery-tool-test-query))))
-	(should
-	 (equal
-	  (progn (with-current-buffer (apply 'xquery-tool-query (elt case 1))
-		   ;; (pp (xml-parse-region))
-		   ;; (pp (last case))
-		   (xml-parse-region)))
-	  (car (last case))))))))
+      (with-current-buffer (apply
+			    'xquery-tool-query
+			    ;; xml doc must be second arg
+			    (car (elt case 1))
+			    (find-file-noselect
+			     (expand-file-name (car case)
+					       test-dir))
+			    (cdr (elt case 1)))
+	;; (pp (xml-parse-region))
+	;; (pp (last case))
+	(xml-parse-region))
+      (should
+       (equal
+	(with-current-buffer (apply
+			      'xquery-tool-query
+			      ;; xml doc must be second arg
+			      (car (elt case 1))
+			      (find-file-noselect
+			       (expand-file-name (car case)
+						 test-dir))
+			      (cdr (elt case 1)))
+	  ;; (pp (xml-parse-region))
+	  ;; (pp (last case))
+	  (xml-parse-region))
+	(car (last case)))))))
+
+;; (ert "xquery-tool-test-xinclude-general")
 
 (ert-deftest xquery-tool-test-positions ()
   "Test whether the links back to the orginal buffer are correct."
   (let* ((xquery-tool-resolve-xincludes nil)
-	 (test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+	 (test-dir (xquery-tool-get-test-dir))
 	(cases `(("simple.xml"
 		  ((breakfast_menu
 		    ((tmplink:start . ,(format "file://%ssimple.xml#40" test-dir))
@@ -339,11 +351,8 @@ TODO: fix paths so that test passes on different machines."
 
 (ert-deftest xquery-tool-test-positions-narrowed ()
   "Test whether the links back to the orginal buffer are correct
-when the buffer is narrowed."
-  (let* ((test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+when the buffer is narrowed."n
+  (let* ((test-dir (xquery-tool-get-test-dir))
 	(xquery-tool-omit-xml-declaration 'yes)
 	(cases `(
 		 ("simple.xml"
@@ -523,5 +532,40 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
 ;; (ert 'xquery-tool-test-unicode-things)
 
 
+(ert-deftest xquery-tool-test-setup-xquery-file ()
+  ;; with a temp buffer
+  (should
+   (equal
+    (file-exists-p
+     (with-temp-buffer
+       (xquery-tool-setup-xquery-file "/" (current-buffer))))
+    t))
+  ;; with a named buffer
+  (should
+   (equal
+    (file-exists-p
+     (let* ((buff  (get-buffer-create "xquery tool test buffer"))
+	   (qfile (xquery-tool-setup-xquery-file "/" buff)))
+       (kill-buffer buff)
+       qfile))
+    t))
+  ;; with an existing file
+  (should
+   (equal
+    (file-exists-p
+     (let* ((fname  (expand-file-name (make-temp-name "xquery-tool") temporary-file-directory))
+	    (f  (with-temp-file fname
+		  (insert "<not really xml> </ XYZ")))
+	   (qfile (xquery-tool-setup-xquery-file "/" fname)))
+       (delete-file fname)
+       qfile))
+    t))
+  ;; with a non-existing file
+  (should-error
+   (xquery-tool-setup-xquery-file
+    "/"
+    (expand-file-name (make-temp-name "xquery-tool") temporary-file-directory))))
+
+;; (ert "xquery-tool-test-setup-xquery-file")
 
 

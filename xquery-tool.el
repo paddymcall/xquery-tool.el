@@ -155,7 +155,7 @@ own files.  Default for FN is
   (expand-file-name fn temporary-file-directory)))
 
 ;;;###autoload
-(defun xquery-tool-query (xquery &optional xml-buff wrap-in-root save-namespace show-results no-index-xml)
+(defun xquery-tool-query (xquery xml-buff &optional wrap-in-root save-namespace show-results no-index-xml)
   "Run the query XQUERY on the current xml document.
 
 XQUERY can be:
@@ -193,11 +193,12 @@ SHOW-RESULTS, true by default in interactive usage, nil
 otherwise, pops up a buffer showing the results.
 
 The function returns the buffer that the results are in."
+  ;; (message "xquery-tool called with %s" (list xquery xml-buff wrap-in-root save-namespace show-results no-index-xml))
   (interactive
    (progn
      (dolist (i (list 'xquery-tool-saxonb-jar 'xquery-tool-java-binary))
        (unless (file-readable-p (symbol-value i))
-	 (error "Can not access %s. Please run `M-x customize-variable %s'" (symbol-value i) i)))
+	 (error "Can not access %s.  Please run `M-x customize-variable %s'" (symbol-value i) i)))
      (let* ((xml-buffer (car (delq nil
 				   (mapcar
 				    (lambda (x)
@@ -242,7 +243,8 @@ The function returns the buffer that the results are in."
 	     save-namespace
 	     'show-results
 	     no-index-xml))))
-  (let ((target-buffer (get-buffer-create xquery-tool-result-buffer-name))
+  (let ((xquery (or xquery "/"))
+	(target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
 	 (cond ((bufferp xquery)
 		;; clean up before rewriting
@@ -440,48 +442,50 @@ xmltok-start."
   "Construct an xquery file containing XQUERY.
 
 If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
-  (let ((tmp (progn (find-file-noselect (xquery-tool-xq-file) 'nowarn)))
-	(xml-buff (cond ((null xml-buffer-or-file) (current-buffer))
-			((bufferp xml-buffer-or-file) xml-buffer-or-file)
-			((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
-			 (find-file-noselect xml-buffer-or-file 'nowarn 'raw))
-			(t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
-	namespaces)
-    (with-current-buffer tmp
-      (erase-buffer))
-    (with-current-buffer xml-buff
-      (save-excursion
-	(save-restriction
-	  ;; make sure to pick up namespaces on root element
-	  (widen)
-	  (goto-char (point-min))
-	  (while (and (xmltok-forward)
-		      (not (member xmltok-type '(start-tag empty-element)))) t)
-	  (dolist (naspa-att xmltok-namespace-attributes)
-	    (let ((naspa-val (xmltok-attribute-value naspa-att))
-		  (naspa-name (xmltok-attribute-local-name naspa-att)))
-	      (if (member naspa-name (mapcar 'car namespaces))
-		  (warn "Namespace already defined for %s, skipping" naspa-name)
-		(with-current-buffer tmp
-		(if (string= naspa-name "xmlns")
-		    (insert (format "declare default element namespace \"%s\";\n"
-				    naspa-val))
-		  (insert (format "declare namespace %s=\"%s\";\n"
-				  naspa-name naspa-val)))))
-	      (push (cons naspa-name naspa-val) namespaces))))))
-    (with-current-buffer tmp
-      (insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n")
-      (when xquery-tool-omit-xml-declaration
-	;; fix for saxon (does not respect standard output option?)
-	(unless (assoc "saxon" namespaces)
-	  (insert "declare namespace saxon=\"http://saxon.sf.net/\";\n")) 
-	(insert "declare option saxon:output \"omit-xml-declaration=yes\";\n")
-	(insert "declare option output:omit-xml-declaration \"yes\";\n"))
-      ;; (insert "declare option output:indent \"yes\";\n")
-      ;; (insert "declare option output:item-separator \"&#xa;\";")
-      (insert xquery)
-      (save-buffer)
-      (buffer-file-name (current-buffer)))))
+  (xmltok-save
+    (let ((tmp (progn (find-file-noselect (xquery-tool-xq-file) 'nowarn)))
+	  (xml-buff (cond ((null xml-buffer-or-file) (current-buffer))
+			  ((bufferp xml-buffer-or-file) xml-buffer-or-file)
+			  ((and (file-exists-p xml-buffer-or-file) (file-regular-p xml-buffer-or-file))
+			   (find-file-noselect xml-buffer-or-file 'nowarn 'raw))
+			  (t (error "Sorry, can't work on this source: %s" xml-buffer-or-file))))
+	  namespaces)
+      (with-current-buffer tmp
+	(erase-buffer))
+      (with-current-buffer xml-buff
+	(save-excursion
+	  (save-restriction
+	    ;; make sure to pick up namespaces on root element
+	    (widen)
+	    (goto-char (point-min))
+	    (while (and (xmltok-forward)
+			(not (member xmltok-type '(start-tag empty-element))))
+	      t)
+	    (dolist (naspa-att xmltok-namespace-attributes)
+	      (let ((naspa-val (xmltok-attribute-value naspa-att))
+		    (naspa-name (xmltok-attribute-local-name naspa-att)))
+		(if (member naspa-name (mapcar 'car namespaces))
+		    (warn "Namespace already defined for %s, skipping" naspa-name)
+		  (with-current-buffer tmp
+		    (if (string= naspa-name "xmlns")
+			(insert (format "declare default element namespace \"%s\";\n"
+					naspa-val))
+		      (insert (format "declare namespace %s=\"%s\";\n"
+				      naspa-name naspa-val)))))
+		(push (cons naspa-name naspa-val) namespaces))))))
+      (with-current-buffer tmp
+	(insert "declare namespace output = \"http://www.w3.org/2010/xslt-xquery-serialization\";\n")
+	(when xquery-tool-omit-xml-declaration
+	  ;; fix for saxon (does not respect standard output option?)
+	  (unless (assoc "saxon" namespaces)
+	    (insert "declare namespace saxon=\"http://saxon.sf.net/\";\n")) 
+	  (insert "declare option saxon:output \"omit-xml-declaration=yes\";\n")
+	  (insert "declare option output:omit-xml-declaration \"yes\";\n"))
+	;; (insert "declare option output:indent \"yes\";\n")
+	;; (insert "declare option output:item-separator \"&#xa;\";")
+	(insert xquery)
+	(save-buffer)
+	(buffer-file-name (current-buffer))))))
 
 (defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
   "Make XMLBUFFER (default `current-buffer') traceable.
