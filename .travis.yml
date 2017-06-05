@@ -1,8 +1,10 @@
 language: bash
+dist: trusty
+sudo: required
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -qq emacs libsaxonb-java
+  - sudo apt-get install -qq emacs24 libsaxonb-java
 
 script:
   - emacs --no-init-file --no-site-file -batch -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit
