@@ -1,6 +1,6 @@
 ;;; xquery-tool.el --- A simple interface to saxonb's xquery.
 
-;; Copyright (C) 2015, 2016 Patrick McAllister
+;; Copyright (C) 2015--2017 Patrick McAllister
 
 ;; Author: Patrick McAllister <pma@rdorte.org>
 ;; Keywords: xml, xquery, emacs
