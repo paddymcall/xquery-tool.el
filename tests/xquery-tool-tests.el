@@ -4,7 +4,6 @@
 
 (require 'format-spec)
 (require 'xml)
-(require 'subr-x)
 (require 'ert)
 (require 'xquery-tool)
 
