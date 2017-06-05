@@ -40,5 +40,5 @@ The results are linked back to the original buffer when possible.
 
 
 #+CAPTION: build status
-https://travis-ci.org/paddymcall/xquery-tool.el.svg?branch=master
+file:https://travis-ci.org/paddymcall/xquery-tool.el.svg?branch=master
 
