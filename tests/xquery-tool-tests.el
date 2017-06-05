@@ -57,7 +57,7 @@ Does not check the links, though."
 <price>$8.95</price>
 <price>$4.50</price>
 <price>$6.95</price>")
-	    ("//price" nil 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+	    ("//price" 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <xq-tool-results>
 <price>$5.95</price>
 <price>$7.95</price>
@@ -66,7 +66,7 @@ Does not check the links, though."
 <price>$6.95</price>
 </xq-tool-results>
 ")
-	    ("//price" nil nil 'save-namespace ,(format-spec
+	    ("//price" nil 'save-namespace ,(format-spec
 						 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <price xmlns:tmplink=\"potemkin\"
        tmplink:start=\"file://%p#98\">$5.95</price>
@@ -79,7 +79,7 @@ Does not check the links, though."
 <price xmlns:tmplink=\"potemkin\"
        tmplink:start=\"file://%p#898\">$6.95</price>"
 						 (format-spec-make ?p (buffer-file-name tmp))))
-	    ("/" nil nil nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<breakfast_menu>\n	  <food>\n		    <name>Belgian Waffles</name>\n		    <price>$5.95</price>\n		    <description>Two of our famous Belgian Waffles with plenty of real maple syrup</description>\n		    <calories>650</calories>\n	  </food>\n	  <food>\n		    <name>Strawberry Belgian Waffles</name>\n		    <price>$7.95</price>\n		    <description>Light Belgian waffles covered with strawberries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>Berry-Berry Belgian Waffles</name>\n		    <price>$8.95</price>\n		    <description>Light Belgian waffles covered with an assortment of fresh berries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>French Toast</name>\n		    <price>$4.50</price>\n		    <description>Thick slices made from our homemade sourdough bread</description>\n		    <calories>600</calories>\n	  </food>\n	  <food>\n		    <name>Homestyle Breakfast</name>\n		    <price>$6.95</price>\n		    <description>Two eggs, bacon or sausage, toast, and our ever-popular hash browns</description>\n		    <calories>950</calories>\n	  </food>\n</breakfast_menu>"))))
+	    ("/" nil nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<breakfast_menu>\n	  <food>\n		    <name>Belgian Waffles</name>\n		    <price>$5.95</price>\n		    <description>Two of our famous Belgian Waffles with plenty of real maple syrup</description>\n		    <calories>650</calories>\n	  </food>\n	  <food>\n		    <name>Strawberry Belgian Waffles</name>\n		    <price>$7.95</price>\n		    <description>Light Belgian waffles covered with strawberries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>Berry-Berry Belgian Waffles</name>\n		    <price>$8.95</price>\n		    <description>Light Belgian waffles covered with an assortment of fresh berries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>French Toast</name>\n		    <price>$4.50</price>\n		    <description>Thick slices made from our homemade sourdough bread</description>\n		    <calories>600</calories>\n	  </food>\n	  <food>\n		    <name>Homestyle Breakfast</name>\n		    <price>$6.95</price>\n		    <description>Two eggs, bacon or sausage, toast, and our ever-popular hash browns</description>\n		    <calories>950</calories>\n	  </food>\n</breakfast_menu>"))))
     (dolist (case cases)
       (with-current-buffer tmp
 	(erase-buffer)
@@ -88,7 +88,7 @@ Does not check the links, though."
 	(should
 	 (equal
 	  (progn
-	    (with-current-buffer (apply 'xquery-tool-query (butlast case))
+	    (with-current-buffer (apply 'xquery-tool-query (car (butlast case)) (current-buffer) (cdr (butlast case)))
 	      (buffer-substring-no-properties (point-min) (point-max))))
 	  (car (last case))))))
     (delete-file (buffer-file-name tmp))
@@ -351,7 +351,7 @@ TODO: fix paths so that test passes on different machines."
 
 (ert-deftest xquery-tool-test-positions-narrowed ()
   "Test whether the links back to the orginal buffer are correct
-when the buffer is narrowed."n
+when the buffer is narrowed."
   (let* ((test-dir (xquery-tool-get-test-dir))
 	(xquery-tool-omit-xml-declaration 'yes)
 	(cases `(
@@ -396,6 +396,8 @@ when the buffer is narrowed."n
 		;; (pp (xml-parse-region (point-min) (point-max)))
 		(xml-parse-region (point-min) (point-max)))
 	      (car (last case))))))))))
+
+;; (ert "xquery-tool-test-positions-narrowed")
 
 (ert-deftest xquery-tool-test-positions-xinclude ()
   "Test back links for xinclude files."
