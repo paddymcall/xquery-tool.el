@@ -35,4 +35,10 @@ should give you a buffer with these results:
 
 The results are linked back to the original buffer when possible.
 
+#+CAPTION: melpa link
 [[http://melpa.org/#/xquery-tool][file:http://melpa.org/packages/xquery-tool-badge.svg]]
+
+
+#+CAPTION: build status
+https://travis-ci.org/paddymcall/xquery-tool.el.svg?branch=master
+
