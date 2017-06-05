@@ -1,0 +1,51 @@
+<TEI
+    xmlns="http://www.tei-c.org/ns/1.0"
+    xmlns:saxon="http://saxon.sf.net/"
+    xmlns:exsl="http://exslt.org/common"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:invention="http://example.com/invented"
+    xmlns:teix="http://www.tei-c.org/ns/Examples"
+    xmlns:html="http://www.w3.org/1999/xhtml"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xmlns:xhtml="http://www.w3.org/1999/xhtml"
+    xmlns:dbk="http://docbook.org/ns/docbook"
+    xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0"
+    xmlns:rng="http://relaxng.org/ns/structure/1.0"
+    xml:id="namespace-test2">
+  <teiHeader xml:lang="en">
+    <fileDesc>
+      <titleStmt>
+	<title type="main">The Title</title>
+	<author>The author</author>
+	<respStmt>
+	  <persName/>
+	  <resp>None.</resp>
+	</respStmt>
+      </titleStmt>
+      <publicationStmt>
+	<authority>SARIT: Search and Retrieval of Indic Texts</authority>
+	<availability status="restricted">
+	  <p>Copyright Notice</p>
+	  <p>Copyright 2016</p>
+	</availability>
+	<date>2016</date>
+      </publicationStmt>
+      <sourceDesc>
+	<p/>
+      </sourceDesc>
+    </fileDesc>
+    <encodingDesc>
+      <editorialDecl>
+	<p>TODO</p>
+      </editorialDecl>
+    </encodingDesc>
+    <revisionDesc>
+      <change when="2016-08-23" who="pma"></change>
+    </revisionDesc>
+  </teiHeader>
+  <text>
+    <body>
+    <p>empty</p>
+  </body>
+  </text>
+</TEI>

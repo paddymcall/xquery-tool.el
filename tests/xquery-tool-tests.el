@@ -6,12 +6,13 @@
 (require 'xml)
 (require 'subr-x)
 (require 'ert)
+(require 'xquery-tool)
 
 (defun xquery-tool-get-test-dir ()
   "Find directory containing tests."
   (file-name-as-directory
    (concat
-    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
+    (file-name-directory (or (find-lisp-object-file-name 'xquery-tool-query nil) "./"))
     "tests")))
 
 (ert-deftest xquery-tool-test-get-namespace-candidates ()
@@ -56,7 +57,7 @@ Does not check the links, though."
 <price>$8.95</price>
 <price>$4.50</price>
 <price>$6.95</price>")
-	    ("//price" nil 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+	    ("//price" 'wrap "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <xq-tool-results>
 <price>$5.95</price>
 <price>$7.95</price>
@@ -65,7 +66,7 @@ Does not check the links, though."
 <price>$6.95</price>
 </xq-tool-results>
 ")
-	    ("//price" nil nil 'save-namespace ,(format-spec
+	    ("//price" nil 'save-namespace ,(format-spec
 						 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <price xmlns:tmplink=\"potemkin\"
        tmplink:start=\"file://%p#98\">$5.95</price>
@@ -78,7 +79,7 @@ Does not check the links, though."
 <price xmlns:tmplink=\"potemkin\"
        tmplink:start=\"file://%p#898\">$6.95</price>"
 						 (format-spec-make ?p (buffer-file-name tmp))))
-	    ("/" nil nil nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<breakfast_menu>\n	  <food>\n		    <name>Belgian Waffles</name>\n		    <price>$5.95</price>\n		    <description>Two of our famous Belgian Waffles with plenty of real maple syrup</description>\n		    <calories>650</calories>\n	  </food>\n	  <food>\n		    <name>Strawberry Belgian Waffles</name>\n		    <price>$7.95</price>\n		    <description>Light Belgian waffles covered with strawberries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>Berry-Berry Belgian Waffles</name>\n		    <price>$8.95</price>\n		    <description>Light Belgian waffles covered with an assortment of fresh berries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>French Toast</name>\n		    <price>$4.50</price>\n		    <description>Thick slices made from our homemade sourdough bread</description>\n		    <calories>600</calories>\n	  </food>\n	  <food>\n		    <name>Homestyle Breakfast</name>\n		    <price>$6.95</price>\n		    <description>Two eggs, bacon or sausage, toast, and our ever-popular hash browns</description>\n		    <calories>950</calories>\n	  </food>\n</breakfast_menu>"))))
+	    ("/" nil nil "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<breakfast_menu>\n	  <food>\n		    <name>Belgian Waffles</name>\n		    <price>$5.95</price>\n		    <description>Two of our famous Belgian Waffles with plenty of real maple syrup</description>\n		    <calories>650</calories>\n	  </food>\n	  <food>\n		    <name>Strawberry Belgian Waffles</name>\n		    <price>$7.95</price>\n		    <description>Light Belgian waffles covered with strawberries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>Berry-Berry Belgian Waffles</name>\n		    <price>$8.95</price>\n		    <description>Light Belgian waffles covered with an assortment of fresh berries and whipped cream</description>\n		    <calories>900</calories>\n	  </food>\n	  <food>\n		    <name>French Toast</name>\n		    <price>$4.50</price>\n		    <description>Thick slices made from our homemade sourdough bread</description>\n		    <calories>600</calories>\n	  </food>\n	  <food>\n		    <name>Homestyle Breakfast</name>\n		    <price>$6.95</price>\n		    <description>Two eggs, bacon or sausage, toast, and our ever-popular hash browns</description>\n		    <calories>950</calories>\n	  </food>\n</breakfast_menu>"))))
     (dolist (case cases)
       (with-current-buffer tmp
 	(erase-buffer)
@@ -87,7 +88,7 @@ Does not check the links, though."
 	(should
 	 (equal
 	  (progn
-	    (with-current-buffer (apply 'xquery-tool-query (butlast case))
+	    (with-current-buffer (apply 'xquery-tool-query (car (butlast case)) (current-buffer) (cdr (butlast case)))
 	      (buffer-substring-no-properties (point-min) (point-max))))
 	  (car (last case))))))
     (delete-file (buffer-file-name tmp))
@@ -149,58 +150,69 @@ Does not check the links, though."
 TODO: fix paths so that test passes on different machines."
   (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
   (let* ((xquery-tool-result-root-element-name "xq-tool-results")
-	(xquery-tool-omit-xml-declaration nil)
-	(xquery-tool-resolve-xincludes t)
-	(test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
-	(cases ;; filename args-for-query result
-	 `(("xi-base.xml" ("/") ((document
-				      ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-				      "\n  "
-				      (p nil "120 Mz is adequate for an average home user.")
-				      "\n  "
-				      (disclaimer
-				       ((xml:base . ,(format "file://%sdisclaimer.xml" test-dir)))
-				       "\n      "
-				       (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
-				       "\n   ")
-				      "\n  "
-				      (p nil "Just checking!")
-				      "\n")))
-	   ("xi-base.xml" ("//p" nil 'wrap) ((xq-tool-results nil "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "120 Mz is adequate for an average home user.")
-							      "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
-							      "\n"
-							      (p
-							       ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-							       "Just checking!")
-							      "\n"))))))
+	 (xquery-tool-omit-xml-declaration nil)
+	 (xquery-tool-resolve-xincludes t)
+	 (test-dir (xquery-tool-get-test-dir))
+	 (cases ;; filename args-for-query result
+	  `(("xi-base.xml" ("/") ((document
+				   ((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+				   "\n  "
+				   (p nil "120 Mz is adequate for an average home user.")
+				   "\n  "
+				   (disclaimer
+				    ((xml:base . ,(format "file://%sdisclaimer.xml" test-dir)))
+				    "\n      "
+				    (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+				    "\n   ")
+				   "\n  "
+				   (p nil "Just checking!")
+				   "\n")))
+	    ("xi-base.xml" ("//p" 'wrap) ((xq-tool-results nil "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"120 Mz is adequate for an average home user.")
+							       "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+							       "\n"
+							       (p
+								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+								"Just checking!")
+							       "\n"))))))
     (dolist (case cases)
-      (with-current-buffer (find-file-noselect
-			    (expand-file-name (car case)
-					      (file-name-directory (symbol-file 'xquery-tool-test-query))))
-	(should
-	 (equal
-	  (progn (with-current-buffer (apply 'xquery-tool-query (elt case 1))
-		   ;; (pp (xml-parse-region))
-		   ;; (pp (last case))
-		   (xml-parse-region)))
-	  (car (last case))))))))
+      (with-current-buffer (apply
+			    'xquery-tool-query
+			    ;; xml doc must be second arg
+			    (car (elt case 1))
+			    (find-file-noselect
+			     (expand-file-name (car case)
+					       test-dir))
+			    (cdr (elt case 1)))
+	;; (pp (xml-parse-region))
+	;; (pp (last case))
+	(xml-parse-region))
+      (should
+       (equal
+	(with-current-buffer (apply
+			      'xquery-tool-query
+			      ;; xml doc must be second arg
+			      (car (elt case 1))
+			      (find-file-noselect
+			       (expand-file-name (car case)
+						 test-dir))
+			      (cdr (elt case 1)))
+	  ;; (pp (xml-parse-region))
+	  ;; (pp (last case))
+	  (xml-parse-region))
+	(car (last case)))))))
+
+;; (ert "xquery-tool-test-xinclude-general")
 
 (ert-deftest xquery-tool-test-positions ()
   "Test whether the links back to the orginal buffer are correct."
   (let* ((xquery-tool-resolve-xincludes nil)
-	 (test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+	 (test-dir (xquery-tool-get-test-dir))
 	(cases `(("simple.xml"
 		  ((breakfast_menu
 		    ((tmplink:start . ,(format "file://%ssimple.xml#40" test-dir))
@@ -340,10 +352,7 @@ TODO: fix paths so that test passes on different machines."
 (ert-deftest xquery-tool-test-positions-narrowed ()
   "Test whether the links back to the orginal buffer are correct
 when the buffer is narrowed."
-  (let* ((test-dir (file-name-as-directory
-		   (concat
-		    (file-name-directory (find-lisp-object-file-name 'xquery-tool-query 'function))
-		    "tests")))
+  (let* ((test-dir (xquery-tool-get-test-dir))
 	(xquery-tool-omit-xml-declaration 'yes)
 	(cases `(
 		 ("simple.xml"
@@ -387,6 +396,8 @@ when the buffer is narrowed."
 		;; (pp (xml-parse-region (point-min) (point-max)))
 		(xml-parse-region (point-min) (point-max)))
 	      (car (last case))))))))))
+
+;; (ert "xquery-tool-test-positions-narrowed")
 
 (ert-deftest xquery-tool-test-positions-xinclude ()
   "Test back links for xinclude files."
@@ -451,15 +462,55 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
     (dolist (case cases)
       (xquery-tool-wipe-temp-files nil 'force)
       (with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
-	(when (consp (elt case 1)) (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	(when (consp (elt case 1))
+	  (widen)
+	  (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
 	(should
 	 (equal
 	  (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
-	    ;;(pp (cons "result" (xml-parse-region (point-min) (point-max))))
+	    ;; (pp (cons "result" (xml-parse-region (point-min) (point-max))))
 	    (xml-parse-region (point-min) (point-max)))
 	  (elt case 3)))))))
 
 ;; (ert "xquery-tool-test-namespace-fun")
+
+(ert-deftest xquery-tool-namespace-test-2 ()
+  "Try not to croak when saxon namespace is already there."  
+  (let* ((test-dir (xquery-tool-get-test-dir))
+	(xquery-tool-result-root-element-name 'beep)
+	(xquery-tool-omit-xml-declaration t)
+	(cases `(("namespace-test2.xml";; actually a libreoffice document
+		  nil ;; range to work on
+		  "//body/p/text()";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\nempty\n")))
+		 ("namespace-test-narrow.xml"
+		  nil ;; range to work on
+		  "count(//l)";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\n2\n")))
+		 ("namespace-test-narrow.xml"
+		  (35 . 143)	       ;; range to work on
+		  "count(//l)";; query
+		  ;; result
+		  ((,xquery-tool-result-root-element-name nil "\n2\n"))))))
+    (dolist (case cases)
+      (xquery-tool-wipe-temp-files nil 'force)
+      (save-restriction
+	(with-current-buffer (find-file-noselect (expand-file-name (car case) test-dir))
+	  (widen)
+	  (when (consp (elt case 1))
+	    (narrow-to-region (car (elt case 1)) (cdr (elt case 1))))
+	  (should
+	   (equal
+	    (with-current-buffer (xquery-tool-query (elt case 2) (current-buffer) 'wrap nil nil)
+	      (message (pp (cons "result" (xml-parse-region (point-min) (point-max)))))
+	      (xml-parse-region (point-min) (point-max)))
+	    (elt case 3))))))))
+
+;; (ert "xquery-tool-namespace-test-2")
+
+
 
 (ert-deftest xquery-tool-test-unicode-things ()
   "Test if unicode things work (match on attribute, name of element, content)."
@@ -483,5 +534,40 @@ sam soup2016-02-09T10:46:26.7281246822016-02-09T10:47:43.326659469sam soupPT1M16
 ;; (ert 'xquery-tool-test-unicode-things)
 
 
+(ert-deftest xquery-tool-test-setup-xquery-file ()
+  ;; with a temp buffer
+  (should
+   (equal
+    (file-exists-p
+     (with-temp-buffer
+       (xquery-tool-setup-xquery-file "/" (current-buffer))))
+    t))
+  ;; with a named buffer
+  (should
+   (equal
+    (file-exists-p
+     (let* ((buff  (get-buffer-create "xquery tool test buffer"))
+	   (qfile (xquery-tool-setup-xquery-file "/" buff)))
+       (kill-buffer buff)
+       qfile))
+    t))
+  ;; with an existing file
+  (should
+   (equal
+    (file-exists-p
+     (let* ((fname  (expand-file-name (make-temp-name "xquery-tool") temporary-file-directory))
+	    (f  (with-temp-file fname
+		  (insert "<not really xml> </ XYZ")))
+	   (qfile (xquery-tool-setup-xquery-file "/" fname)))
+       (delete-file fname)
+       qfile))
+    t))
+  ;; with a non-existing file
+  (should-error
+   (xquery-tool-setup-xquery-file
+    "/"
+    (expand-file-name (make-temp-name "xquery-tool") temporary-file-directory))))
+
+;; (ert "xquery-tool-test-setup-xquery-file")
 
 
