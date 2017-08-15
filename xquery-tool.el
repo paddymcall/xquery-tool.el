@@ -124,6 +124,11 @@ Makes `xquery-tool-parse-to-shadow' parse included files."
   :group 'xquery-tool
   :type '(boolean))
 
+(defcustom xquery-tool-index-xml t
+  "Whether to index XML documents in querying."
+  :group 'xquery-tool
+  :type '(boolean))
+
 (defvar xquery-tool-xquery-history nil
   "A var to hold the history of xqueries.")
 
@@ -192,6 +197,11 @@ tracking of elements in the source document are not deleted.
 SHOW-RESULTS, true by default in interactive usage, nil
 otherwise, pops up a buffer showing the results.
 
+NO-INDEX-XML inhibits the creation of an indexed file.  Useful
+for large/deep files, or to speed up queries when you don't wish
+to do any editing based on the results.  Set the preference with
+`xquery-tool-index-xml' (M-x customize-variable).
+
 The function returns the buffer that the results are in."
   ;; (message "xquery-tool called with %s" (list xquery xml-buff wrap-in-root save-namespace show-results no-index-xml))
   (interactive
@@ -215,8 +225,6 @@ The function returns the buffer that the results are in."
 						      (eq major-mode 'xquery-mode)))
 					   x))
 				       (buffer-list)))))
-
-
 	    (xquery
 	     (read-string
 	      (save-match-data
@@ -246,26 +254,30 @@ The function returns the buffer that the results are in."
   (let ((xquery (or xquery "/"))
 	(target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
-	 (cond ((bufferp xquery)
-		;; clean up before rewriting
-		(when (get-file-buffer (xquery-tool-xq-file))
-		  (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
-		    (set-buffer-modified-p nil)
-		    (kill-buffer (current-buffer))))
-		(with-temp-file (xquery-tool-xq-file)
-		  (erase-buffer)
-		  (insert (with-current-buffer xquery
-			    (buffer-substring-no-properties (point-min) (point-max)))))
-		(xquery-tool-xq-file))
-	       ((and (file-readable-p xquery) (file-regular-p xquery))
-		xquery)
-	       (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
-	(xml-shadow-file (if no-index-xml
-			     (with-current-buffer xml-buff
-			       (expand-file-name
-				(buffer-file-name (current-buffer))))
-			   (with-current-buffer xml-buff
-			     (xquery-tool-parse-to-shadow (current-buffer)))))
+	 (cond
+	  ((bufferp xquery)
+	   ;; clean up before rewriting
+	   (when (get-file-buffer (xquery-tool-xq-file))
+	     (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
+	       (set-buffer-modified-p nil)
+	       (kill-buffer (current-buffer))))
+	   (with-temp-file (xquery-tool-xq-file)
+	     (erase-buffer)
+	     (insert (with-current-buffer xquery
+		       (buffer-substring-no-properties (point-min) (point-max)))))
+	   (xquery-tool-xq-file))
+	  ((and (file-readable-p xquery) (file-regular-p xquery))
+	   xquery)
+	  (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
+	(xml-shadow-file
+	 (cond
+	  ((or (not (bufferp xml-buff)) (not (buffer-live-p xml-buff))) ())
+	  ((or no-index-xml (not xquery-tool-index-xml))
+	   (with-current-buffer xml-buff
+	     (expand-file-name
+	      (buffer-file-name (current-buffer)))))
+	  (t (with-current-buffer xml-buff
+	       (xquery-tool-parse-to-shadow (current-buffer))))))
 	process-status)
     (with-current-buffer target-buffer
       (if buffer-read-only (read-only-mode -1))
@@ -274,13 +286,13 @@ The function returns the buffer that the results are in."
 	  (apply 'call-process
 		 (list
 		  xquery-tool-java-binary ;; program
-		  nil		;; xml-shadow-file     ;; infile
+		  nil		;; infile
 		  target-buffer	;; destination
 		  nil		;; update display
 		  ;; args
 		  "-classpath" xquery-tool-saxonb-jar
 		  "net.sf.saxon.Query"
-		  (format "-s:%s" xml-shadow-file)
+		  (format "-s:%s" (or xml-shadow-file "-"))
 		  (format "-q:%s" xquery-file)
 		  ;; (format "-qversion:%s" "3.0")
 		  (format "-ext:on")
