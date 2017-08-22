@@ -242,7 +242,7 @@ The function returns the buffer that the results are in."
 	     wrap
 	     save-namespace
 	     'show-results
-	     no-index-xml))))
+	     't))))
   (let ((xquery (or xquery "/"))
 	(target-buffer (get-buffer-create xquery-tool-result-buffer-name))
 	(xquery-file
