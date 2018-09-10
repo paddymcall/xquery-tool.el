@@ -274,8 +274,15 @@ The function returns the buffer that the results are in."
 	  ((or (not (bufferp xml-buff)) (not (buffer-live-p xml-buff))) ())
 	  ((or no-index-xml (not xquery-tool-index-xml))
 	   (with-current-buffer xml-buff
-	     (expand-file-name
-	      (buffer-file-name (current-buffer)))))
+	     (cond
+	      ((buffer-file-name (current-buffer))
+	       (expand-file-name
+		(buffer-file-name (current-buffer))))
+	      ;; no associated file
+	      (t (let ((tmp-buff (expand-file-name (make-temp-name "xquery-temp-content") temporary-file-directory)))
+		   (with-temp-file tmp-buff
+		     (insert-buffer-substring xml-buff))
+		   tmp-buff)))))
 	  (t (with-current-buffer xml-buff
 	       (xquery-tool-parse-to-shadow (current-buffer))))))
 	process-status)
@@ -286,9 +293,9 @@ The function returns the buffer that the results are in."
 	  (apply 'call-process
 		 (list
 		  xquery-tool-java-binary ;; program
-		  nil		;; infile
-		  target-buffer	;; destination
-		  nil		;; update display
+		  nil			  ;; infile
+		  target-buffer		  ;; destination
+		  nil			  ;; update display
 		  ;; args
 		  "-classpath" xquery-tool-saxonb-jar
 		  "net.sf.saxon.Query"
@@ -327,8 +334,25 @@ The function returns the buffer that the results are in."
       (display-buffer target-buffer
 		      `((display-buffer-reuse-window
 			 display-buffer-in-previous-window
-			 display-buffer-use-some-window) . ((inhibit-same-window . t) (reusable-frames . ,(frame-list))))))
+			 display-buffer-use-some-window)
+			.
+			((inhibit-same-window . t) (reusable-frames . ,(frame-list))))))
     target-buffer))
+
+;;;###autoload
+(defun xquery-tool-query-string (xquery xml-string &optional wrap-in-root save-namespace show-results no-index-xml)
+  "Run XQUERY on XML-STRING and return result as a string."
+  (let ((buff (get-buffer-create "*xquery-temp-buff*"))
+	result)
+    (with-current-buffer buff
+      (erase-buffer)
+      (insert xml-string)
+      (setq result
+	    (with-current-buffer (xquery-tool-query xquery (current-buffer) wrap-in-root save-namespace show-results no-index-xml)
+	      (buffer-substring-no-properties (point-min) (point-max)))))
+    (kill-buffer buff)
+    result))
+
 
 (defun xquery-tool-setup-xquery-results (&optional target-buffer save-namespaces)
   "Try to construct links for the results in TARGET-BUFFER.
