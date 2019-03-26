@@ -86,12 +86,14 @@ Saxon-B can be obtained from various sources, for example:
 
 (defcustom xquery-tool-result-buffer-name "*xquery-tool results*"
   "Name of buffer to show results of xqueries in."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type 'string)
 
 (defcustom xquery-tool-temporary-xquery-file-name "xquery-tool-temp.xq"
   "Filename for storing one-off xqueries.
 It will be created in `temporary-file-directory'."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type 'string)
 
 ;; (defcustom xquery-tool-temporary-indexed-xml-file-name "xquery-temp-indexed.xml"
 ;;   "Filename for storing an indexed version of the xml you're querying.
@@ -101,16 +103,18 @@ It will be created in `temporary-file-directory'."
 (defcustom xquery-tool-temporary-xml-file-name "xquery-tool-temp.xml"
   "Filename for storing xml that is not in a file (region, e.g.).
 It will be created in `temporary-file-directory'."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type 'string)
 
 (defcustom xquery-tool-link-namespace "tmplink"
   "Name of namespace to use for linking xquery results to original file."
-  :group 'xquery-tool)
+  :group 'xquery-tool
+  :type 'string)
 
 (defcustom xquery-tool-result-root-element-name "xq-tool-results"
   "Name of root element to use for wrapping results."
   :group 'xquery-tool
-  :type '(string))
+  :type 'string)
 
 (defcustom xquery-tool-omit-xml-declaration nil
   "Whether to omit xml-declaration or not in output."
