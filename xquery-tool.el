@@ -60,7 +60,7 @@
 
 
 ;; (defcustom xquery-tool-backend 'saxonb
-;;   "TODO: Current xquery tool backend. 
+;;   "TODO: Current xquery tool backend.
 
 ;; It must be defined in `xquery-tool-backends', and installed on
 ;; your system."
@@ -91,7 +91,7 @@ Saxon-B can be obtained from various sources, for example:
 
 (defcustom xquery-tool-temporary-xquery-file-name "xquery-tool-temp.xq"
   "Filename for storing one-off xqueries.
-It will be created in `temporary-file-directory'."
+It will be created in the directory set in the variable `temporary-file-directory'."
   :group 'xquery-tool
   :type 'string)
 
@@ -102,7 +102,7 @@ It will be created in `temporary-file-directory'."
 
 (defcustom xquery-tool-temporary-xml-file-name "xquery-tool-temp.xml"
   "Filename for storing xml that is not in a file (region, e.g.).
-It will be created in `temporary-file-directory'."
+It will be created in the directory set in the variable `temporary-file-directory'."
   :group 'xquery-tool
   :type 'string)
 
@@ -181,18 +181,19 @@ possible to create links, they are to the position (as returned
 by `point') in the source file or buffer.  This means that if
 something before that point is changed, all links to points after
 that position will stop working.  To disable this, and save on
-processing time, call the function with a double prefix arg (`C-u
-C-u M-x xquery-tool-query').
+processing time, call the function with a double prefix
+arg (\\[universal-argument] \\[universal-argument] \\[xquery-tool-query])).
 
 To use this function, you might first have to customize the
 `xquery-tool-java-binary' and `xquery-tool-saxonb-jar'
-settings (M-x customize-group RET xquery-tool).
+settings (\\[customize-group] \\[newline] xquery-tool).
 
 If WRAP-IN-ROOT is not nil (or you use a prefix arg (`C-u') in
 the interactive call), the results will be wrapped in a root
 element, possibly generating a well-formed XML document for a
-node set.  Configure `xquery-tool-result-root-element-name' to
-choose the element name.
+node set.  Configure (\\[customize-variable]
+`xquery-tool-result-root-element-name' to choose the element
+name.
 
 If SAVE-NAMESPACE is not nil (or you use a triple prefix arg in
 the interactive call), then the attributes added to enable
@@ -204,7 +205,7 @@ otherwise, pops up a buffer showing the results.
 NO-INDEX-XML inhibits the creation of an indexed file.  Useful
 for large/deep files, or to speed up queries when you don't wish
 to do any editing based on the results.  Set the preference with
-`xquery-tool-index-xml' (M-x customize-variable).
+`xquery-tool-index-xml'.
 
 The function returns the buffer that the results are in."
   ;; (message "xquery-tool called with %s" (list xquery xml-buff wrap-in-root save-namespace show-results no-index-xml))
@@ -345,7 +346,11 @@ The function returns the buffer that the results are in."
 
 ;;;###autoload
 (defun xquery-tool-query-string (xquery xml-string &optional wrap-in-root save-namespace show-results no-index-xml)
-  "Run XQUERY on XML-STRING and return result as a string."
+  "Run XQUERY on XML-STRING and return result as a string.
+
+For the other options, WRAP-IN-ROOT, SAVE-NAMESPACE,
+SHOW-RESULTS, and NO-INDEX-XML, see the documentation of
+‘xquery-tool’."
   (let ((buff (get-buffer-create "*xquery-temp-buff*"))
 	result)
     (with-current-buffer buff
@@ -518,7 +523,7 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 	(when xquery-tool-omit-xml-declaration
 	  ;; fix for saxon (does not respect standard output option?)
 	  (unless (assoc "saxon" namespaces)
-	    (insert "declare namespace saxon=\"http://saxon.sf.net/\";\n")) 
+	    (insert "declare namespace saxon=\"http://saxon.sf.net/\";\n"))
 	  (insert "declare option saxon:output \"omit-xml-declaration=yes\";\n")
 	  (insert "declare option output:omit-xml-declaration \"yes\";\n"))
 	;; (insert "declare option output:indent \"yes\";\n")
@@ -808,6 +813,59 @@ If FORCE is non-nil, don't ask for affirmation.  Essentially, all
 ;; (xquery-tool-make-namespace-start-string);; " tmplink:start=\"#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp");; " tmplink:start=\"soup.tmp#\""
 ;; (xquery-tool-make-namespace-start-string "soup.tmp" "1234");; " tmplink:start=\"soup.tmp#1234\""
+
+(defun xquery-tool-get-buffer (buffer-or-string)
+  "Try to return a buffer for BUFFER-OR-STRING."
+  (cond
+   ((null buffer-or-string)
+    (get-buffer-create (make-temp-name "xquery-empty-buff-")))
+   ((bufferp buffer-or-string) buffer-or-string)
+   ((and (stringp buffer-or-string)
+         (get-buffer buffer-or-string))
+    (get-buffer buffer-or-string))
+   ((stringp buffer-or-string)
+    (or
+     (and (file-exists-p buffer-or-string)
+          (find-file-noselect buffer-or-string 'nowarn))
+     (and (file-exists-p (expand-file-name buffer-or-string))
+          (find-file-noselect (expand-file-name buffer-or-string) 'nowarn))
+     (get-buffer-create buffer-or-string)))
+   (t (error "Failed to get a buffer for %s" buffer-or-string))))
+
+;;;###autoload
+(defun xquery-tool-query-ob-execute (body params)
+  "A function for org-babel to execute BODY as an xquery with org-babel PARAMS.
+
+BODY is the content of the ‘org-mode source block.
+
+The PARAMS specific to this function are:
+
+- ‘:xquery-xml’: Specify the XML document that the query should
+  run against (must be a ‘buffer-name’ or local file, see
+  ‘xquery-tool-get-buffer’).  For remote documents, use “doc()”
+  in the XQuery.
+
+- ‘:xquery-standalone’: If present, unconditionally run the query
+  in BODY without modifications.  Usually, xquery-tool will try
+  to write the necessary preamble (namespace declarations, etc.)
+  automatically."
+  (let ((xml-doc (xquery-tool-get-buffer (cdr (assq :xquery-xml params))))
+        (xquery ; If the xquery looks like a standalone query, use it as is.
+         (if (or (assq :xquery-standalone params)
+                 (and (stringp body)
+                   (string-match-p "^declare " body)))
+             (with-current-buffer (get-buffer-create (make-temp-name " *org babel xquery source"))
+               (insert body)
+               (current-buffer))
+           ;; Otherwise, pass the string through without modification.
+           body)))
+    (with-current-buffer (xquery-tool-query
+                          xquery
+                          (or xml-doc ""))
+      (when (bufferp xquery) (kill-buffer xquery))
+      (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defalias 'org-babel-execute:xquery 'xquery-tool-query-ob-execute)
 
 ;;; help
 
