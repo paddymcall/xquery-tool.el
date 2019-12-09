@@ -586,54 +586,68 @@ Returns the filename to which the shadow tree was written."
 					     (cons
 					      (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
 					      (xmltok-attribute-value x)))
-					   xmltok-namespace-attributes)))))))
+					   xmltok-namespace-attributes))
+                  ;; (message "Namespaces, based on root, for %s (from %s) are: \n%s"
+                  ;;          (buffer-name (current-buffer))
+                  ;;          xmlbuffer
+                  ;;          namespaces)
+                  )))))
 	(with-temp-buffer
 	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
 	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
-	    ;; if this was an xml document, set stuff up
-	    (when (member xmltok-type '(start-tag empty-element))
-	      ;; save namespaces defined on root element
-	      (when (< 0 (length xmltok-namespace-attributes))
-		(mapc (lambda (x)
-			(setq namespaces
-			      (add-to-list 'namespaces
-					   (cons
-					    (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
-					    (xmltok-attribute-value x)))))
-		      xmltok-namespace-attributes))
+	  ;; if this was an xml document, set stuff up
+	  (let ((local-namespaces
+                 (mapcar
+                  (lambda (x)
+                    (cons
+		     (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
+		     (xmltok-attribute-value x)))
+                  xmltok-namespace-attributes)))
+            (when (member xmltok-type '(start-tag empty-element))
+	      ;; save namespaces defined on the current element
+	      (mapc (lambda (x)
+		      (add-to-list 'namespaces x))
+		    local-namespaces)
 	      ;; add the new namespace we need for tracing
 	      (save-excursion
-		(goto-char xmltok-name-end)
-		(insert new-namespace)
-		(when (with-current-buffer src-buffer
-			(or (buffer-narrowed-p) (use-region-p)))
-		  (mapc (lambda (nsp) (insert (format " %s%s=\"%s\""
-						      (if (caar nsp) (format "%s:" (caar nsp)) "")
-						      (cdar nsp)
-						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
-			namespaces)))
+	        (goto-char xmltok-name-end)
+	        (insert new-namespace)
+	        (when (with-current-buffer src-buffer
+		        (or (buffer-narrowed-p) (use-region-p)))
+		  (mapc (lambda (nsp)
+                          ;; make sure we don’t repeat namespaces
+                          (unless (member nsp local-namespaces)
+                            (insert (format " %s%s=\"%s\""
+					    (if (caar nsp) (format "%s:" (caar nsp)) "")
+					    (cdar nsp)
+					    (url-recreate-url (url-generic-parse-url (cdr nsp)))))))
+		        namespaces)))
+              ;; (message "So the result is:\n\n**********\n%s\n**********\n\n"
+              ;;          (buffer-substring-no-properties
+              ;;           (point-min)
+              ;;           (point)))
 	      ;; `parse' document and add tracers to start-tags and empty elements
 	      (goto-char (point-min)) ;; but start from the top again
 	      ;; (message "Start parsing at %s" (time-to-seconds (current-time)))
 	      (while (xmltok-forward)
-		(when (member xmltok-type '(start-tag empty-element))
+	        (when (member xmltok-type '(start-tag empty-element))
 		  ;; consider xinclude option
 		  (when (and
-			 xquery-tool-resolve-xincludes
-			 (string= "include" (xmltok-start-tag-local-name))
-			 (rassoc "http://www.w3.org/2001/XInclude" namespaces)
-			 (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		         xquery-tool-resolve-xincludes
+		         (string= "include" (xmltok-start-tag-local-name))
+		         (rassoc "http://www.w3.org/2001/XInclude" namespaces)
+		         (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
 		    (message "Processing an xinclude")
 		    (goto-char xmltok-start)
 		    (xmltok-save
 		      (xmltok-forward)
 		      (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
 		    (if (and xi-replacement (file-name-absolute-p xi-replacement))
-			(setq grow-factor
+		        (setq grow-factor
 			      (+ grow-factor
-				 (abs
+			         (abs
 				  (- (point-max)
 				     (progn
 				       (xquery-tool-set-attribute xmltok-start
@@ -645,15 +659,15 @@ Returns the filename to which the shadow tree was written."
 		  (set-marker current-parse-position (point))
 		  (goto-char xmltok-name-end)
 		  (setq grow-factor ;; adjust grow-factor for length of insertion
-			(+ grow-factor
+		        (+ grow-factor
 			   (abs
 			    (-
 			     (point-max)
 			     (progn
 			       (insert (xquery-tool-make-namespace-start-string
-					original-file-name
-					(+ (- xmltok-start grow-factor) buffer-offset)
-					xquery-tool-link-namespace))
+				        original-file-name
+				        (+ (- xmltok-start grow-factor) buffer-offset)
+				        xquery-tool-link-namespace))
 			       (point-max))))))
 		  (goto-char current-parse-position)
 		  ;; after the first start-tag, we need to take account of
@@ -662,8 +676,8 @@ Returns the filename to which the shadow tree was written."
 		    (setq grow-factor (+ grow-factor (length new-namespace)))
 		    (setq outside-root nil))))
 	      ;; (message "End parsing at %s" (time-to-seconds (current-time)))
-	      )
-	    (set-marker current-parse-position nil)
+	      ))
+	  (set-marker current-parse-position nil)
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
