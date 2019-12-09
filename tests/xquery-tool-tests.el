@@ -31,6 +31,8 @@
 	  (xmltok-forward)
 	  (should (equal (xquery-tool-get-namespace-candidates "tmplink") (cdr case)))))))
 
+;; (ert "xquery-tool-test-get-namespace-candidates")
+
 (ert-deftest xquery-tool-test-setup-xquery-results ()
   (let
       ((cases '(
@@ -180,31 +182,32 @@ TODO: fix paths so that test passes on different machines."
 				   "\n  "
 				   (p nil "Just checking!")
 				   "\n")))
-	    ("xi-base.xml" ("//p" 'wrap) ((xq-tool-results nil "\n"
-							       (p
-								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-								"120 Mz is adequate for an average home user.")
-							       "\n"
-							       (p
-								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-								"The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
-							       "\n"
-							       (p
-								((xmlns:xi . "http://www.w3.org/2001/XInclude"))
-								"Just checking!")
-							       "\n"))))))
+	    ("xi-base.xml" ("//p" 'wrap)
+             ((xq-tool-results nil "\n"
+			       (p
+				((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+				"120 Mz is adequate for an average home user.")
+			       "\n"
+			       (p
+				((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+				"The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+			       "\n"
+			       (p
+				((xmlns:xi . "http://www.w3.org/2001/XInclude"))
+				"Just checking!")
+			       "\n"))))))
     (dolist (case cases)
-      (with-current-buffer (apply
-			    'xquery-tool-query
-			    ;; xml doc must be second arg
-			    (car (elt case 1))
-			    (find-file-noselect
-			     (expand-file-name (car case)
-					       test-dir))
-			    (cdr (elt case 1)))
-	;; (pp (xml-parse-region))
-	;; (pp (last case))
-	(xml-parse-region))
+      ;; (with-current-buffer (apply
+      ;;   		    'xquery-tool-query
+      ;;   		    ;; xml doc must be second arg
+      ;;   		    (car (elt case 1))
+      ;;   		    (find-file-noselect
+      ;;   		     (expand-file-name (car case)
+      ;;   				       test-dir))
+      ;;   		    (cdr (elt case 1)))
+      ;;   ;; (pp (xml-parse-region))
+      ;;   ;; (pp (last case))
+      ;;   (xml-parse-region))
       (should
        (equal
 	(with-current-buffer (apply
@@ -221,6 +224,172 @@ TODO: fix paths so that test passes on different machines."
 	(car (last case)))))))
 
 ;; (ert "xquery-tool-test-xinclude-general")
+
+(ert-deftest xquery-tool-test-xinclude-namespaces-general ()
+  "Test general functionality of xinclude stuff, with namespaces.
+
+TODO: fix paths so that test passes on different machines."
+  (xquery-tool-wipe-temp-files (directory-files temporary-file-directory 'full "^xquery-tool-") 'force)
+  (let* ((xquery-tool-result-root-element-name "xq-tool-results")
+	 (xquery-tool-omit-xml-declaration nil)
+	 (xquery-tool-resolve-xincludes t)
+	 (test-dir (xquery-tool-get-test-dir))
+	 (cases ;; filename args-for-query result
+	  `(("xi-base-namespaced.xml" ("/")
+             ((document
+               ((xmlns . "http://greatnamespace.org/example/1")
+                (xmlns:xi . "http://www.w3.org/2001/XInclude"))
+               "\n  "
+               (p nil "120 Mz is adequate for an average home user.")
+               "\n  "
+               (disclaimer
+                ((xmlns . "http://greatnamespaces.org/example/2")
+                 (xmlns:parentnaspa . "http://greatnamespace.org/example/1")
+                 (xmlns:xinclude . "http://www.w3.org/2001/XInclude")
+                 (xml:base . "file:///home/beta/webstuff/emacs-things/xquery-tool.el/tests/disclaimer-namespaced.xml"))
+                "\n      "
+                (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
+                "\n      "
+                (parentnaspa:p nil "Another par, but in the parent doc’s namespace.")
+                "\n   ")
+               "\n  "
+               (p nil "Just checking!")
+               "\n")))
+	    ("xi-base-namespaced.xml" ("//p" 'wrap)
+             ((xq-tool-results nil "\n"
+                               (p
+                                ((xmlns . "http://greatnamespace.org/example/1")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude"))
+                                "120 Mz is adequate for an average home user.")
+                               "\n"
+                               (parentnaspa:p
+                                ((xmlns . "http://greatnamespaces.org/example/2")
+                                 (xmlns:parentnaspa . "http://greatnamespace.org/example/1")
+                                 (xmlns:xinclude . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude"))
+                                "Another par, but in the parent doc’s namespace.")
+                               "\n"
+                               (p
+                                ((xmlns . "http://greatnamespace.org/example/1")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude"))
+                                "Just checking!")
+                               "\n")))
+            ("xi-base-2-namespaced.xml" ("//p" 'wrap)
+             ((xq-tool-results nil "\n"
+                               (p
+                                ((xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "120 Mz is adequate for an average home user.")
+                               "\n"
+                               (p
+                                ((xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "Just checking!")
+                               "\n")))
+            ("xi-base-2-namespaced.xml" ("//tei:p" 'wrap)
+             ((xq-tool-results nil "\n"
+                               (p
+                                ((xmlns . "http://www.tei-c.org/ns/1.0")
+                                 (xmlns:saxon . "http://saxon.sf.net/")
+                                 (xmlns:exsl . "http://exslt.org/common")
+                                 (xmlns:xs . "http://www.w3.org/2001/XMLSchema")
+                                 (xmlns:invention . "http://example.com/invented")
+                                 (xmlns:teix . "http://www.tei-c.org/ns/Examples")
+                                 (xmlns:html . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:xlink . "http://www.w3.org/1999/xlink")
+                                 (xmlns:xhtml . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:dbk . "http://docbook.org/ns/docbook")
+                                 (xmlns:a . "http://relaxng.org/ns/compatibility/annotations/1.0")
+                                 (xmlns:rng . "http://relaxng.org/ns/structure/1.0")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "Copyright Notice")
+                               "\n"
+                               (p
+                                ((xmlns . "http://www.tei-c.org/ns/1.0")
+                                 (xmlns:saxon . "http://saxon.sf.net/")
+                                 (xmlns:exsl . "http://exslt.org/common")
+                                 (xmlns:xs . "http://www.w3.org/2001/XMLSchema")
+                                 (xmlns:invention . "http://example.com/invented")
+                                 (xmlns:teix . "http://www.tei-c.org/ns/Examples")
+                                 (xmlns:html . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:xlink . "http://www.w3.org/1999/xlink")
+                                 (xmlns:xhtml . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:dbk . "http://docbook.org/ns/docbook")
+                                 (xmlns:a . "http://relaxng.org/ns/compatibility/annotations/1.0")
+                                 (xmlns:rng . "http://relaxng.org/ns/structure/1.0")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "Copyright 2016")
+                               "\n"
+                               (p
+                                ((xmlns . "http://www.tei-c.org/ns/1.0")
+                                 (xmlns:saxon . "http://saxon.sf.net/")
+                                 (xmlns:exsl . "http://exslt.org/common")
+                                 (xmlns:xs . "http://www.w3.org/2001/XMLSchema")
+                                 (xmlns:invention . "http://example.com/invented")
+                                 (xmlns:teix . "http://www.tei-c.org/ns/Examples")
+                                 (xmlns:html . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:xlink . "http://www.w3.org/1999/xlink")
+                                 (xmlns:xhtml . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:dbk . "http://docbook.org/ns/docbook")
+                                 (xmlns:a . "http://relaxng.org/ns/compatibility/annotations/1.0")
+                                 (xmlns:rng . "http://relaxng.org/ns/structure/1.0")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0")))
+                               "\n"
+                               (p
+                                ((xmlns . "http://www.tei-c.org/ns/1.0")
+                                 (xmlns:saxon . "http://saxon.sf.net/")
+                                 (xmlns:exsl . "http://exslt.org/common")
+                                 (xmlns:xs . "http://www.w3.org/2001/XMLSchema")
+                                 (xmlns:invention . "http://example.com/invented")
+                                 (xmlns:teix . "http://www.tei-c.org/ns/Examples")
+                                 (xmlns:html . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:xlink . "http://www.w3.org/1999/xlink")
+                                 (xmlns:xhtml . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:dbk . "http://docbook.org/ns/docbook")
+                                 (xmlns:a . "http://relaxng.org/ns/compatibility/annotations/1.0")
+                                 (xmlns:rng . "http://relaxng.org/ns/structure/1.0")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "TODO")
+                               "\n"
+                               (p
+                                ((xmlns . "http://www.tei-c.org/ns/1.0")
+                                 (xmlns:saxon . "http://saxon.sf.net/")
+                                 (xmlns:exsl . "http://exslt.org/common")
+                                 (xmlns:xs . "http://www.w3.org/2001/XMLSchema")
+                                 (xmlns:invention . "http://example.com/invented")
+                                 (xmlns:teix . "http://www.tei-c.org/ns/Examples")
+                                 (xmlns:html . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:xlink . "http://www.w3.org/1999/xlink")
+                                 (xmlns:xhtml . "http://www.w3.org/1999/xhtml")
+                                 (xmlns:dbk . "http://docbook.org/ns/docbook")
+                                 (xmlns:a . "http://relaxng.org/ns/compatibility/annotations/1.0")
+                                 (xmlns:rng . "http://relaxng.org/ns/structure/1.0")
+                                 (xmlns:xi . "http://www.w3.org/2001/XInclude")
+                                 (xmlns:tei . "http://www.tei-c.org/ns/1.0"))
+                                "empty")
+                               "\n"))))))
+    (dolist (case cases)
+      ;; (xquery-tool-wipe-temp-files nil 'force)
+      (should
+       (equal
+	(with-current-buffer (apply
+			      'xquery-tool-query
+			      ;; xml doc must be second arg
+			      (car (elt case 1))
+			      (find-file-noselect
+			       (expand-file-name (car case)
+						 test-dir))
+			      (cdr (elt case 1)))
+	  ;; n(pp (xml-parse-region))
+	  ;; (pp (last case))
+	  (xml-parse-region))
+	(car (last case)))))))
+
+;; (ert "xquery-tool-test-xinclude-namespaces-general")
 
 (ert-deftest xquery-tool-test-positions ()
   "Test whether the links back to the orginal buffer are correct."

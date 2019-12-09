@@ -1,0 +1,7 @@
+<?xml version='1.0'?>
+<disclaimer xmlns="http://greatnamespaces.org/example/2" xmlns:parentnaspa="http://greatnamespace.org/example/1" xmlns:xinclude="http://www.w3.org/2001/XInclude">
+  <p>The opinions represented herein represent those of the individual
+  and should not be interpreted as official policy endorsed by this
+  organization.</p>
+  <parentnaspa:p>Another par, but in the parent doc’s namespace.</parentnaspa:p>
+</disclaimer>

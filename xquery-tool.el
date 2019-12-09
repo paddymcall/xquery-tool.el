@@ -273,7 +273,7 @@ The function returns the buffer that the results are in."
 	   (xquery-tool-xq-file))
 	  ((and (file-readable-p xquery) (file-regular-p xquery))
 	   xquery)
-	  (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
+	  (t (xquery-tool-setup-xquery-file xquery xml-buff))))
 	(xml-shadow-file
 	 (cond
 	  ((or (not (bufferp xml-buff)) (not (buffer-live-p xml-buff))) ())
@@ -530,7 +530,14 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 	;; (insert "declare option output:item-separator \"&#xa;\";")
 	(insert xquery)
 	(save-buffer)
+        ;; (message
+        ;;  "Your xquery is: \n\n**********\n %s\n**********\n\n"
+        ;;  (buffer-substring-no-properties (point-min) (point-max)))
 	(buffer-file-name (current-buffer))))))
+
+;; (find-file
+;;  (with-current-buffer (get-buffer "xi-base-namespaced.xml")
+;;    (xquery-tool-setup-xquery-file "//p" (current-buffer))))
 
 (defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
   "Make XMLBUFFER (default `current-buffer') traceable.
