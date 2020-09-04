@@ -862,20 +862,45 @@ BODY is the content of the ‘org-mode source block.
 The PARAMS specific to this function are:
 
 - ‘:xquery-xml’: Specify the XML document that the query should
-  run against (must be a ‘buffer-name’ or local file, see
-  ‘xquery-tool-get-buffer’).  For remote documents, use “doc()”
-  in the XQuery.
+  run against: in sequence, we check if the string refers to a
+  named source (‘org-babel-find-named-block’), a ‘buffer-name’,
+  or a local file (to force a file name, let the string start
+  with “./” or “/”).  The first match is used as the XML document
+  to query (see also ‘xquery-tool-get-buffer’).  For remote
+  documents, use “doc(...)” in the XQuery.
 
 - ‘:xquery-standalone’: If present, unconditionally run the query
   in BODY without modifications.  Usually, xquery-tool will try
   to write the necessary preamble (namespace declarations, etc.)
   automatically."
-  (let ((xml-doc (xquery-tool-get-buffer (cdr (assq :xquery-xml params))))
+  (let ((xml-doc
+         (pcase (cdr (assq :xquery-xml params))
+           ((pred null) '())
+           ((pred (lambda (x) (not (stringp x))))
+            '())
+           ;; (rx-to-string '(and bos (or "./" "/")))
+           ((and (pred (string-match (rx (and bos (or "./" "/")))))
+                 src)
+            (xquery-tool-get-buffer src))
+           ((and
+             (app org-babel-find-named-block src-block-location)
+             (guard (integer-or-marker-p src-block-location)))
+            (save-excursion
+              (goto-char src-block-location)
+              (org-babel-mark-block)
+              (let ((b (current-buffer))
+                    (s (region-beginning))
+                    (e (region-end)))
+                (with-current-buffer (xquery-tool-get-buffer '())
+                  (insert-buffer-substring-no-properties b s e)
+                  (current-buffer)))))
+           (default (xquery-tool-get-buffer default))))
         (xquery ; If the xquery looks like a standalone query, use it as is.
          (if (or (assq :xquery-standalone params)
                  (and (stringp body)
-                   (string-match-p "^declare " body)))
-             (with-current-buffer (get-buffer-create (make-temp-name " *org babel xquery source"))
+                      (string-match-p "^declare " body)))
+             (with-current-buffer (get-buffer-create
+                                   (make-temp-name " *org babel xquery source"))
                (insert body)
                (current-buffer))
            ;; Otherwise, pass the string through without modification.
