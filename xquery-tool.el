@@ -1,6 +1,6 @@
 ;;; xquery-tool.el --- A simple interface to saxonb's xquery.
 
-;; Copyright (C) 2015--2017 Patrick McAllister
+;; Copyright (C) 2015--2020 Patrick McAllister
 
 ;; Author: Patrick McAllister <pma@rdorte.org>
 ;; Keywords: xml, xquery, emacs
@@ -44,6 +44,7 @@
 ;; (unless (require 'cl-lib nil t)
 ;;   (require 'cl))
 (require 'cl-lib)
+(require 'ob-core)
 
 ;;;###autoload
 (defgroup xquery-tool nil
@@ -273,7 +274,7 @@ The function returns the buffer that the results are in."
 	   (xquery-tool-xq-file))
 	  ((and (file-readable-p xquery) (file-regular-p xquery))
 	   xquery)
-	  (t (xquery-tool-setup-xquery-file xquery (current-buffer)))))
+	  (t (xquery-tool-setup-xquery-file xquery xml-buff))))
 	(xml-shadow-file
 	 (cond
 	  ((or (not (bufferp xml-buff)) (not (buffer-live-p xml-buff))) ())
@@ -530,7 +531,14 @@ If XML-BUFFER-OR-FILE is specified, look at that for namespace declarations."
 	;; (insert "declare option output:item-separator \"&#xa;\";")
 	(insert xquery)
 	(save-buffer)
+        ;; (message
+        ;;  "Your xquery is: \n\n**********\n %s\n**********\n\n"
+        ;;  (buffer-substring-no-properties (point-min) (point-max)))
 	(buffer-file-name (current-buffer))))))
+
+;; (find-file
+;;  (with-current-buffer (get-buffer "xi-base-namespaced.xml")
+;;    (xquery-tool-setup-xquery-file "//p" (current-buffer))))
 
 (defun xquery-tool-parse-to-shadow (&optional xmlbuffer)
   "Make XMLBUFFER (default `current-buffer') traceable.
@@ -579,54 +587,68 @@ Returns the filename to which the shadow tree was written."
 					     (cons
 					      (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
 					      (xmltok-attribute-value x)))
-					   xmltok-namespace-attributes)))))))
+					   xmltok-namespace-attributes))
+                  ;; (message "Namespaces, based on root, for %s (from %s) are: \n%s"
+                  ;;          (buffer-name (current-buffer))
+                  ;;          xmlbuffer
+                  ;;          namespaces)
+                  )))))
 	(with-temp-buffer
 	  (insert-buffer-substring-no-properties src-buffer start end)
 	  (goto-char (point-min))
 	  ;; set namespace on first start tag (hoping it's the root element)
 	  (while (and (xmltok-forward) (not (member xmltok-type '(start-tag empty-element))) t))
-	    ;; if this was an xml document, set stuff up
-	    (when (member xmltok-type '(start-tag empty-element))
-	      ;; save namespaces defined on root element
-	      (when (< 0 (length xmltok-namespace-attributes))
-		(mapc (lambda (x)
-			(setq namespaces
-			      (add-to-list 'namespaces
-					   (cons
-					    (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
-					    (xmltok-attribute-value x)))))
-		      xmltok-namespace-attributes))
+	  ;; if this was an xml document, set stuff up
+	  (let ((local-namespaces
+                 (mapcar
+                  (lambda (x)
+                    (cons
+		     (cons (xmltok-attribute-prefix x) (xmltok-attribute-local-name x))
+		     (xmltok-attribute-value x)))
+                  xmltok-namespace-attributes)))
+            (when (member xmltok-type '(start-tag empty-element))
+	      ;; save namespaces defined on the current element
+	      (mapc (lambda (x)
+		      (add-to-list 'namespaces x))
+		    local-namespaces)
 	      ;; add the new namespace we need for tracing
 	      (save-excursion
-		(goto-char xmltok-name-end)
-		(insert new-namespace)
-		(when (with-current-buffer src-buffer
-			(or (buffer-narrowed-p) (use-region-p)))
-		  (mapc (lambda (nsp) (insert (format " %s%s=\"%s\""
-						      (if (caar nsp) (format "%s:" (caar nsp)) "")
-						      (cdar nsp)
-						      (url-recreate-url (url-generic-parse-url (cdr nsp))))))
-			namespaces)))
+	        (goto-char xmltok-name-end)
+	        (insert new-namespace)
+	        (when (with-current-buffer src-buffer
+		        (or (buffer-narrowed-p) (use-region-p)))
+		  (mapc (lambda (nsp)
+                          ;; make sure we don’t repeat namespaces
+                          (unless (member nsp local-namespaces)
+                            (insert (format " %s%s=\"%s\""
+					    (if (caar nsp) (format "%s:" (caar nsp)) "")
+					    (cdar nsp)
+					    (url-recreate-url (url-generic-parse-url (cdr nsp)))))))
+		        namespaces)))
+              ;; (message "So the result is:\n\n**********\n%s\n**********\n\n"
+              ;;          (buffer-substring-no-properties
+              ;;           (point-min)
+              ;;           (point)))
 	      ;; `parse' document and add tracers to start-tags and empty elements
 	      (goto-char (point-min)) ;; but start from the top again
 	      ;; (message "Start parsing at %s" (time-to-seconds (current-time)))
 	      (while (xmltok-forward)
-		(when (member xmltok-type '(start-tag empty-element))
+	        (when (member xmltok-type '(start-tag empty-element))
 		  ;; consider xinclude option
 		  (when (and
-			 xquery-tool-resolve-xincludes
-			 (string= "include" (xmltok-start-tag-local-name))
-			 (rassoc "http://www.w3.org/2001/XInclude" namespaces)
-			 (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
+		         xquery-tool-resolve-xincludes
+		         (string= "include" (xmltok-start-tag-local-name))
+		         (rassoc "http://www.w3.org/2001/XInclude" namespaces)
+		         (string= (xmltok-start-tag-prefix) (cdar (rassoc "http://www.w3.org/2001/XInclude" namespaces))))
 		    (message "Processing an xinclude")
 		    (goto-char xmltok-start)
 		    (xmltok-save
 		      (xmltok-forward)
 		      (setq xi-replacement (xquery-tool-get-xinclude-shadow)))
 		    (if (and xi-replacement (file-name-absolute-p xi-replacement))
-			(setq grow-factor
+		        (setq grow-factor
 			      (+ grow-factor
-				 (abs
+			         (abs
 				  (- (point-max)
 				     (progn
 				       (xquery-tool-set-attribute xmltok-start
@@ -638,15 +660,15 @@ Returns the filename to which the shadow tree was written."
 		  (set-marker current-parse-position (point))
 		  (goto-char xmltok-name-end)
 		  (setq grow-factor ;; adjust grow-factor for length of insertion
-			(+ grow-factor
+		        (+ grow-factor
 			   (abs
 			    (-
 			     (point-max)
 			     (progn
 			       (insert (xquery-tool-make-namespace-start-string
-					original-file-name
-					(+ (- xmltok-start grow-factor) buffer-offset)
-					xquery-tool-link-namespace))
+				        original-file-name
+				        (+ (- xmltok-start grow-factor) buffer-offset)
+				        xquery-tool-link-namespace))
 			       (point-max))))))
 		  (goto-char current-parse-position)
 		  ;; after the first start-tag, we need to take account of
@@ -655,8 +677,8 @@ Returns the filename to which the shadow tree was written."
 		    (setq grow-factor (+ grow-factor (length new-namespace)))
 		    (setq outside-root nil))))
 	      ;; (message "End parsing at %s" (time-to-seconds (current-time)))
-	      )
-	    (set-marker current-parse-position nil)
+	      ))
+	  (set-marker current-parse-position nil)
 	  (write-region nil nil tmp-file-name nil 'shutup)
 	  (unless (member (cons original-file-name tmp-file-name) xquery-tool-file-mappings)
 	    (push (cons original-file-name tmp-file-name)  xquery-tool-file-mappings))))
@@ -841,20 +863,45 @@ BODY is the content of the ‘org-mode source block.
 The PARAMS specific to this function are:
 
 - ‘:xquery-xml’: Specify the XML document that the query should
-  run against (must be a ‘buffer-name’ or local file, see
-  ‘xquery-tool-get-buffer’).  For remote documents, use “doc()”
-  in the XQuery.
+  run against: in sequence, we check if the string refers to a
+  named source (‘org-babel-find-named-block’), a ‘buffer-name’,
+  or a local file (to force a file name, let the string start
+  with “./” or “/”).  The first match is used as the XML document
+  to query (see also ‘xquery-tool-get-buffer’).  For remote
+  documents, use “doc(...)” in the XQuery.
 
 - ‘:xquery-standalone’: If present, unconditionally run the query
   in BODY without modifications.  Usually, xquery-tool will try
   to write the necessary preamble (namespace declarations, etc.)
   automatically."
-  (let ((xml-doc (xquery-tool-get-buffer (cdr (assq :xquery-xml params))))
+  (let ((xml-doc
+         (pcase (cdr (assq :xquery-xml params))
+           ((pred null) '())
+           ((pred (lambda (x) (not (stringp x))))
+            '())
+           ;; (rx-to-string '(and bos (or "./" "/")))
+           ((and (pred (string-match (rx (and bos (or "./" "/")))))
+                 src)
+            (xquery-tool-get-buffer src))
+           ((and
+             (app org-babel-find-named-block src-block-location)
+             (guard (integer-or-marker-p src-block-location)))
+            (save-excursion
+              (goto-char src-block-location)
+              (org-babel-mark-block)
+              (let ((b (current-buffer))
+                    (s (region-beginning))
+                    (e (region-end)))
+                (with-current-buffer (xquery-tool-get-buffer '())
+                  (insert-buffer-substring-no-properties b s e)
+                  (current-buffer)))))
+           (default (xquery-tool-get-buffer default))))
         (xquery ; If the xquery looks like a standalone query, use it as is.
          (if (or (assq :xquery-standalone params)
                  (and (stringp body)
-                   (string-match-p "^declare " body)))
-             (with-current-buffer (get-buffer-create (make-temp-name " *org babel xquery source"))
+                      (string-match-p "^declare " body)))
+             (with-current-buffer (get-buffer-create
+                                   (make-temp-name " *org babel xquery source"))
                (insert body)
                (current-buffer))
            ;; Otherwise, pass the string through without modification.
