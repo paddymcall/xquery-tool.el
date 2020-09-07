@@ -1,10 +1,9 @@
-language: bash
-dist: trusty
-sudo: required
+language: shell
+dist: focal
 
 before_install:
   - sudo apt-get -qq update
-  - sudo apt-get install -qq emacs24 emacs24-el libsaxonb-java openjdk-7-jre
+  - sudo apt-get install -y -qq emacs emacs-el libsaxonb-java openjdk-7-jre
 
 script:
   - emacs --no-init-file --no-site-file -batch -l xquery-tool.el -l tests/xquery-tool-tests.el -f ert-run-tests-batch-and-exit
