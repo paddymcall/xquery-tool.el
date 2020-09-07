@@ -246,7 +246,7 @@ TODO: fix paths so that test passes on different machines."
                 ((xmlns . "http://greatnamespaces.org/example/2")
                  (xmlns:parentnaspa . "http://greatnamespace.org/example/1")
                  (xmlns:xinclude . "http://www.w3.org/2001/XInclude")
-                 (xml:base . "file:///home/beta/webstuff/emacs-things/xquery-tool.el/tests/disclaimer-namespaced.xml"))
+                 (xml:base . ,(format "file://%sdisclaimer-namespaced.xml" test-dir)))
                 "\n      "
                 (p nil "The opinions represented herein represent those of the individual\n  and should not be interpreted as official policy endorsed by this\n  organization.")
                 "\n      "

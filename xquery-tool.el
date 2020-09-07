@@ -44,6 +44,7 @@
 ;; (unless (require 'cl-lib nil t)
 ;;   (require 'cl))
 (require 'cl-lib)
+(require 'ob-core)
 
 ;;;###autoload
 (defgroup xquery-tool nil
