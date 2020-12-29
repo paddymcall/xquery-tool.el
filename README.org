@@ -59,7 +59,7 @@ The results are linked back to the original buffer when possible.
 
 
 #+CAPTION: Basic function
-file:./basic-function.gif
+[[./basic-function.gif]]
 
 * Installation
 
