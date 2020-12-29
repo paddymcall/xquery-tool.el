@@ -1,39 +1,85 @@
-#+TITLE: xquery-tool: A simplistic interface to saxonb's xquery for emacs
+#+TITLE: xquery-tool: A simple GNU/Emacs interface to Saxonb's XQuery processor
+#+AUTHOR: Patrick McAllister
 
-After installing, open a buffer containing an xml document, and call:
-~M-x xquery-tool-query~. Then enter an xpath that works for your
+* Quick start
+
+After [[Installation][installing]], open a buffer containing an XML document, and call:
+~M-x xquery-tool-query RET~. Then enter an XPath that works for your
 document.
 
-Dependencies (apart from emacs):
-
-- saxon basic (http://saxon.sourceforge.net/; on Debian, ~aptitude install libsaxonb-java~)
+For simple cases, an XQuery preamble including namespaces will be set
+automatically.
 
 Calling ~M-x xquery-tool-query RET //title RET RET~ with this document
 (see http://www.w3schools.com/xsl/xpath_syntax.asp) open:
 
+
+#+NAME: Simple XML Doc
 #+BEGIN_SRC nxml
   <?xml version="1.0" encoding="UTF-8"?>
   <bookstore>
   <book>
-    <title lang="en">Harry Potter</title>
-    <price>29.99</price>
+    <title lang="en">The Colour of Magic</title>
+    <price unit="euro">29.99</price>
   </book>
   <book>
     <title lang="en">Learning XML</title>
-    <price>39.95</price>
+    <price unit="euro">39.95</price>
   </book>
   </bookstore>
 #+END_SRC
 
-should give you a buffer with these results:
+Will give you a buffer with these results:
 
 #+BEGIN_SRC nxml
-<?xml version="1.0" encoding="UTF-8"?>
 <title lang="en">Harry Potter</title>
 <title lang="en">Learning XML</title>
 #+END_SRC
 
 The results are linked back to the original buffer when possible.
+
+* Dependencies (apart from Emacs):
+
+- saxon basic (http://saxon.sourceforge.net/; on Debian, ~aptitude install libsaxonb-java~)
+
+* Typical workflows
+
+** Simple XPath 
+
+1) Open an XML document, like the one in [[Simple XML Doc]]
+2) Run an xquery on the buffer
+3) Watch out for links back to the main document
+   - *NOTE:* Links are to locations in the buffer, not to the elements
+     as such.  That’s why editing around point A might move the text
+     that follows, making the links invalid.
+   - *Solution:* either ~reverse()~ your xquery (later occurrences
+     will be at the top), or go through the list of results backwards.
+4) You can now work on the results, for example:
+   - Keyboard macros (try ~F3~ and ~F4~)
+
+
+#+CAPTION: Basic function
+file:./basic-function.gif
+
+* Installation
+
+In GNU/Emacs (with [[https://melpa.org/#/getting-started][melpa packaging]] set up): 
+
+~M-x package-install RET xquery-tool~
+
+This will install the [[https://melpa.org/][Melpa]] package: https://melpa.org/#/xquery-tool
+
+To install from git, clone this repository and make sure to load
+file:xquery-tool.el (see [[Testing]] below for an example).
+
+* Testing
+
+#+begin_SRC bash
+  emacs --no-init-file --no-site-file -batch \
+        -l xquery-tool.el \
+        -l tests/xquery-tool-tests.el \
+        -f ert-run-tests-batch-and-exit
+#+end_SRC
 
 #+CAPTION: melpa link
 [[http://melpa.org/#/xquery-tool][http://melpa.org/packages/xquery-tool-badge.svg]]
