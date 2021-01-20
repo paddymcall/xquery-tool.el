@@ -206,7 +206,9 @@ otherwise, pops up a buffer showing the results.
 NO-INDEX-XML inhibits the creation of an indexed file.  Useful
 for large/deep files, or to speed up queries when you don't wish
 to do any editing based on the results.  Set the preference with
-`xquery-tool-index-xml'.
+`xquery-tool-index-xml'.  The value of NO-INDEX-XML is ignored
+when SAVE-NAMESPACE is not nil, because SAVE-NAMESPACE is only
+useful for an indexed file.
 
 The function returns the buffer that the results are in."
   ;; (message "xquery-tool called with %s" (list xquery xml-buff wrap-in-root save-namespace show-results no-index-xml))
@@ -278,7 +280,8 @@ The function returns the buffer that the results are in."
 	(xml-shadow-file
 	 (cond
 	  ((or (not (bufferp xml-buff)) (not (buffer-live-p xml-buff))) ())
-	  ((or no-index-xml (not xquery-tool-index-xml))
+	  ((and (or no-index-xml (not xquery-tool-index-xml))
+                (not save-namespace))
 	   (with-current-buffer xml-buff
 	     (cond
 	      ((buffer-file-name (current-buffer))
