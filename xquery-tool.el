@@ -264,15 +264,18 @@ The function returns the buffer that the results are in."
 	(xquery-file
 	 (cond
 	  ((bufferp xquery)
-	   ;; clean up before rewriting
-	   (when (get-file-buffer (xquery-tool-xq-file))
-	     (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
-	       (set-buffer-modified-p nil)
-	       (kill-buffer (current-buffer))))
-	   (with-temp-file (xquery-tool-xq-file)
-	     (erase-buffer)
-	     (insert (with-current-buffer xquery
-		       (buffer-substring-no-properties (point-min) (point-max)))))
+	   ;; Clean up before rewriting, but avoid overwriting current
+	   ;; XQuery buffer
+	   (unless (equal (get-file-buffer (xquery-tool-xq-file))
+                          xquery)
+             (when (get-file-buffer (xquery-tool-xq-file))
+	       (with-current-buffer (get-file-buffer (xquery-tool-xq-file))
+	         (set-buffer-modified-p nil)
+	         (kill-buffer (current-buffer))))
+	     (with-temp-file (xquery-tool-xq-file)
+	       (erase-buffer)
+	       (insert (with-current-buffer xquery
+		         (buffer-substring-no-properties (point-min) (point-max))))))
 	   (xquery-tool-xq-file))
 	  ((and (file-readable-p xquery) (file-regular-p xquery))
 	   xquery)
